@@ -72,11 +72,51 @@
 | Agent_Mgr | 代理管理器，负责拉起和管理 Agent |
 | Agent | 玩家专属 Actor，内跑 ECS World，处理游戏逻辑 |
 
-### 2.3 ECS 与 Actor 关系
+### 2.3 架构分层
 
-- **Actor 模型**：作为服务分发和并发管理的基础单元
-- **ECS**：在 Actor 内部运行，每个玩家一个 ECS World
-- **扩展性**：单节点内服务可拆分，未来切多节点只需改配置
+项目分为两个层级，概念清晰，职责分明：
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│              Skynet Service Layer (service/)              │
+│                                                              │
+│   基础设施层：actor 级别的服务，处理玩家登录前的逻辑          │
+│                                                              │
+│   Gate         ─  网络连接、协议解析                         │
+│   Login_Master ─  登录排队、验证分发                        │
+│   Login_Worker ─  bcrypt 校验（独立运行）                   │
+│   DB_Proxy     ─  数据库操作                                │
+│   Agent_Mgr    ─  Agent 管理                                │
+└────────────────────────────┬────────────────────────────────┘
+                             │ 玩家登录后进入...
+                             ↓
+┌─────────────────────────────────────────────────────────────┐
+│                 ECS World Layer (agent/)                    │
+│                                                              │
+│   游戏逻辑层：玩家进入后，逻辑在 Agent 内的 ECS World 中运行  │
+│                                                              │
+│   Agent (Actor) ─ 持有 ECS World                            │
+│     └── World                                               │
+│           ├── Components (数据)                             │
+│           └── Processors (玩法逻辑)  ← ECS System          │
+│                                                              │
+│   ECS System = Agent 内的玩法系统，处理玩家数据              │
+└─────────────────────────────────────────────────────────────┘
+```
+
+**两层区别**：
+
+| 层级 | 定位 | 作用域 | 运行方式 |
+|------|------|--------|----------|
+| Skynet Service | 基础设施层 | 全局共享 | 每个服务是独立 Actor |
+| ECS Processor | 游戏逻辑层 | 单个玩家 | 在 Agent World 内运行 |
+
+### 2.4 ECS 与 Actor 关系
+
+- **Actor 模型**：作为基础设施层的并发单元（Gate、Login、Agent）
+- **ECS**：在 Agent 内部运行，每个玩家一个 ECS World
+- **ECS Processor**：Agent World 内的玩法逻辑，处理单个玩家的数据
+- **扩展性**：单节点内服务可拆分，ECS Processor 可按需独立成 Actor
 
 ---
 
@@ -294,16 +334,28 @@ PlayerEntity
 | SaveSystem | 定期将 ECS 数据回写 MongoDB |
 | LoadSystem | 从 MongoDB 加载玩家数据到 ECS |
 
-### 6.4 架构决策：每玩家一个 ECS World
+### 6.4 ECS Processor（ECS 游戏逻辑）
 
-**原因**：
-- 状态隔离，错误不扩散
-- 数据缓存天然按玩家分
-- 为多节点扩展预留接口
+**注意**：这里不使用 "System" 命名，避免与 Skynet Service 混淆。
 
-**代价**：
-- 内存开销（5000 个 World 实例需监控）
-- 跨玩家交互需通过消息路由
+ECS Processor 是在 Agent World 内运行的玩法逻辑，与 Skynet Service 是不同层级的概念：
+
+| 层级 | 命名 | 作用域 | 运行环境 |
+|------|------|--------|----------|
+| Skynet Service | Gate, Login, DB_Proxy | 全局共享 | 独立 Actor |
+| ECS Processor | Save, Load, Combat | 单个玩家 | Agent World 内 |
+
+**Processor 定义**：
+
+| Processor | 职责 |
+|-----------|------|
+| LoadProcessor | 从 MongoDB 加载玩家数据到 ECS |
+| SaveProcessor | 定期将 ECS 数据回写 MongoDB |
+| CombatProcessor | 战斗逻辑（预留） |
+
+**设计原则**：
+- 轻量 Processor 可直接内嵌在 World 内
+- 重型 Processor（如复杂战斗计算）可独立成 Actor（通过消息通信）
 
 ---
 
@@ -502,24 +554,23 @@ ark-server/
 │   ├── core/                      # ECS 引擎核心
 │   │   ├── world.lua              # World 管理器
 │   │   ├── component.lua          # Component 基类
-│   │   ├── system.lua            # System 基类
-│   │   └── entity.lua             # Entity 实现
+│   │   ├── processor.lua         # Processor 基类
+│   │   └── entity.lua            # Entity 实现
 │   ├── components/                # 组件定义 (C - 数据)
-│   │   ├── account.lua            # 账号组件
-│   │   ├── player_data.lua        # 玩家数据组件
-│   │   ├── char_data.lua          # 干员数据组件
-│   │   ├── item_stack.lua         # 物品组件
-│   │   └── ...                    # 更多组件按需添加
-│   └── systems/                   # 系统定义 (S - 逻辑)
-│       ├── login_system.lua       # 登录逻辑
-│       ├── save_system.lua        # 存档逻辑
-│       ├── load_system.lua        # 加载逻辑
-│       └── ...                    # 更多系统按需添加
+│   │   ├── account.lua           # 账号组件
+│   │   ├── player_data.lua       # 玩家数据组件
+│   │   ├── char_data.lua         # 干员数据组件
+│   │   ├── item_stack.lua        # 物品组件
+│   │   └── ...                   # 更多组件按需添加
+│   └── processors/               # 玩法逻辑 (S - 逻辑，在 Agent World 内运行)
+│       ├── save_processor.lua    # 存盘逻辑
+│       ├── load_processor.lua    # 加载逻辑
+│       └── ...                   # 更多 Processor 按需添加
 │
 ├── entities/                      # 实体模板 (E - 实体的组装规则)
-│   ├── player_entity.lua           # 玩家实体
-│   ├── operator_entity.lua        # 干员实体
-│   └── ...                        # 更多实体按需添加
+│   ├── player_entity.lua         # 玩家实体
+│   ├── operator_entity.lua       # 干员实体
+│   └── ...                       # 更多实体按需添加
 │
 ├── agent/                  # Agent 服务 (ECS World 容器)
 │   ├── agent.lua           # Agent 入口
