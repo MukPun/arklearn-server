@@ -220,7 +220,23 @@
 
 ## 6. ECS 设计
 
-### 6.1 组件定义
+### 6.1 设计理念
+
+ECS 架构遵循以下核心原则：
+- **C（Component）**：纯数据载体，不包含逻辑
+- **E（Entity）**：实体的标识，通过挂载不同 Component 组合获得不同功能
+- **S（System）**：控制逻辑，处理拥有特定 Component 的实体
+
+### 6.2 ECS 核心（ecs/core/）
+
+| 文件 | 职责 |
+|------|------|
+| `world.lua` | World 管理器，负责 Entity 创建/销毁、Component 挂载/卸载、System 执行 |
+| `component.lua` | Component 基类，定义数据结构和注册机制 |
+| `system.lua` | System 基类，定义逻辑更新接口 |
+| `entity.lua` | Entity 实现，作为 Component 的容器 |
+
+### 6.3 组件定义（ecs/components/）
 
 ```lua
 -- Account Component (账号信息)
@@ -235,7 +251,7 @@ PlayerData = {
     name = "",        -- 玩家昵称
     level = 0,		-- 等级
     exp = 0,		-- 经验值
-    reason = 0,		-- 
+    reason = 0,		--
     charList = {},    -- List<CharData> (玩家持有的所有干员)
     squad = {},       -- string[](队伍干员ID)
     desktopChar = "", -- 桌面干员ID
@@ -482,23 +498,32 @@ ark-server/
 │   └── agent_mgr/          # Agent 管理器
 │       └── agent_mgr.lua
 │
-├── agent/                  # Agent 服务 (ECS World)
-│   ├── agent.lua           # Agent 入口
-│   ├── world.lua           # ECS World 实现
-│   ├── components/         # 组件定义
-│   │   ├── account.lua
-│   │   ├── player_data.lua
-│   │   ├── char_data.lua
-│   │   └── item_stack.lua
-│   └── systems/            # 系统定义
-│       ├── save_system.lua
-│       └── load_system.lua
+├── ecs/                           # ECS 核心框架
+│   ├── core/                      # ECS 引擎核心
+│   │   ├── world.lua              # World 管理器
+│   │   ├── component.lua          # Component 基类
+│   │   ├── system.lua            # System 基类
+│   │   └── entity.lua             # Entity 实现
+│   ├── components/                # 组件定义 (C - 数据)
+│   │   ├── account.lua            # 账号组件
+│   │   ├── player_data.lua        # 玩家数据组件
+│   │   ├── char_data.lua          # 干员数据组件
+│   │   ├── item_stack.lua         # 物品组件
+│   │   └── ...                    # 更多组件按需添加
+│   └── systems/                   # 系统定义 (S - 逻辑)
+│       ├── login_system.lua       # 登录逻辑
+│       ├── save_system.lua        # 存档逻辑
+│       ├── load_system.lua        # 加载逻辑
+│       └── ...                    # 更多系统按需添加
 │
-├── ecs/                    # ECS 核心框架
-│   ├── world.lua
-│   ├── component.lua
-│   ├── system.lua
-│   └── entity.lua
+├── entities/                      # 实体模板 (E - 实体的组装规则)
+│   ├── player_entity.lua           # 玩家实体
+│   ├── operator_entity.lua        # 干员实体
+│   └── ...                        # 更多实体按需添加
+│
+├── agent/                  # Agent 服务 (ECS World 容器)
+│   ├── agent.lua           # Agent 入口
+│   └── world.lua           # ECS World 实例化
 │
 ├── proto/                  # sproto 协议定义
 │   ├── login.sproto
