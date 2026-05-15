@@ -388,10 +388,28 @@ db.players.createIndex({ "name": 1 })
     player_data 3 : PlayerData
 }
 
+# 注册请求
+.RegisterRequest {
+    account 0 : string       # 账号名
+    password_hash 1 : string # 密码的 SHA256 (客户端预处理)
+    device_id 2 : string     # 设备唯一标识
+}
+
+# 注册结果
+.RegisterResponse {
+    error_code 0 : integer   # 0:成功, 1:账号已存在, 2:密码格式不对, 3:系统错误
+    uid 1 : integer          # 玩家全局唯一ID (注册成功时)
+}
+
 # RPC 绑定
 login 1 {
     request LoginRequest
     response LoginResponse
+}
+
+register 2 {
+    request RegisterRequest
+    response RegisterResponse
 }
 
 # 玩家数据
@@ -429,13 +447,18 @@ login 1 {
 | 错误码 | 含义 |
 |--------|------|
 | 0 | 成功 |
-| 1 | 密码错误 |
-| 2 | 账号不存在 |
+| 1 | 密码错误 / 账号已存在（注册时） |
+| 2 | 账号不存在 / 密码格式不对（注册时） |
 | 3 | 服务器维护 |
 | 4 | Token 无效（重连时） |
 | 1001 | 队列已满 |
 | 1002 | 登录超时 |
 | 1003 | 系统错误 |
+
+**错误码范围**：
+- `0-99`：通用成功/失败
+- `1-99`：登录相关
+- `1001+`：系统级错误（队列、服务器等）
 
 ---
 
