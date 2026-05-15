@@ -86,10 +86,12 @@
 
 **职责**：
 - 接收登录请求，写入登录队列
+- 每帧处理登录队列
 - 检查账号是否在线（顶号逻辑）
 - 向 DB_Proxy 查询账号 bcrypt_hash
 - 派发验证任务给 Login_Worker
 - 接收验证结果，通知 Agent_Mgr
+- 持有服务器登录信息。如在线玩家uid列表（检查是否顶号）、在线玩家数量等等
 
 **关键参数**：
 
@@ -103,6 +105,7 @@
 ### 3.2 Login_Worker (池)
 
 **职责**：
+
 - 执行 bcrypt 验证
 - 独立运行，不阻塞其他服务
 
@@ -180,7 +183,7 @@
 
 ### 4.5 第四阶段：登录成功响应
 
-1. Agent 组装 LoginResponse（uid + token）
+1. Agent 组装 LoginResponse（uid + token+playerData）
 2. Agent 直接响应客户端
 3. 客户端收到成功响应，保存 Token，进入游戏
 
@@ -230,9 +233,9 @@ Account = {
 -- PlayerData Component (玩家游戏数据)
 PlayerData = {
     name = "",        -- 玩家昵称
-    level = 0,
-    exp = 0,
-    reason = 0,
+    level = 0,		-- 等级
+    exp = 0,		-- 经验值
+    reason = 0,		-- 
     charList = {},    -- List<CharData> (玩家持有的所有干员)
     squad = {},       -- string[](队伍干员ID)
     desktopChar = "", -- 桌面干员ID
@@ -250,7 +253,7 @@ CharData = {
     trust = 0       -- 信赖值
 }
 
--- ItemStack Component (物品)
+-- ItemStack Component (玩家持有物品)
 ItemStack = {
     id = 0,      -- 物品ID
     amount = 0   -- 数量
@@ -261,11 +264,11 @@ ItemStack = {
 
 ```
 PlayerEntity
-├── Account Component
-├── PlayerData Component
-├── CharData Component × N (每个干员一个)
-└── ItemStack Component × N (每个物品一个)
+├── Account Component     (账号信息)
+└── PlayerData Component  (玩家数据，包含 charList 和 items)
 ```
+
+**说明**：CharData 和 ItemStack 作为 PlayerData 的子字段嵌入，而非独立 Component。
 
 ### 6.3 系统定义
 
@@ -295,21 +298,45 @@ PlayerEntity
 | 集合 | 文档结构 | 说明 |
 |------|----------|------|
 | `accounts` | `{ _id, name, password, uid }` | 账号信息 |
-| `players` | `{ _id, uid, name, level, exp, reason, squad, desktopChar, permissions }` | 玩家基础数据 |
-| `chardatas` | `{ _id, uid, templateId, elite, level, exp, trust }` | 干员数据 |
-| `items` | `{ _id, uid, id, amount }` | 物品数据 |
+| `players` | 玩家完整数据（见下方结构） | 玩家游戏数据 |
+
+**players 集合结构**：
+
+```javascript
+{
+  _id: ObjectId,          // 玩家唯一ID (uid)
+  name: "xxx",            // 玩家昵称
+  level: 10,              // 等级
+  exp: 5000,              // 经验值
+  reason: 100,           // 理智
+  charList: [             // 玩家持有的所有干员（嵌入式）
+    { id: "char_001", templateId: "operator_001", elite: 0, level: 1, exp: 0, trust: 0 },
+    { id: "char_002", templateId: "operator_002", elite: 1, level: 30, exp: 500, trust: 100 }
+  ],
+  squad: ["char_001", "char_002"],  // 队伍干员ID列表
+  desktopChar: "char_001",          // 桌面干员ID
+  items: [               // 玩家持有物品（嵌入式）
+    { id: 1001, amount: 100 },
+    { id: 2002, amount: 50 }
+  ],
+  permissions: ["admin"] // 权限列表
+}
+```
+
+**设计决策**：
+- `charList` 和 `items` 嵌入 `players` 文档，减少 `_id` 数量
+- MongoDB 16MB 限制对正常玩家数据完全够用
+- 单文档查询更高效，无需跨集合 JOIN
 
 ### 7.2 索引设计
 
 ```javascript
-// accounts
+// accounts - 用户名唯一索引
 db.accounts.createIndex({ "name": 1 }, { unique: true })
 
-// chardatas
-db.chardatas.createIndex({ "uid": 1 })
-
-// items
-db.items.createIndex({ "uid": 1 })
+// players - uid 唯一索引（由 _id 提供，自动有唯一索引）
+// players.name 如需按昵称查询可加索引（预留）
+db.players.createIndex({ "name": 1 })
 ```
 
 ### 7.3 存盘策略
