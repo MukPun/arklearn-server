@@ -1,0 +1,60 @@
+.LoginRequest {
+    account 0 : string
+    password_hash 1 : string
+    token 2 : string
+    device_id 3 : string
+}
+
+.LoginResponse {
+    error_code 0 : integer
+    uid 1 : integer
+    token 2 : string
+    player_data 3 : PlayerData
+}
+
+.RegisterRequest {
+    account 0 : string
+    password_hash 1 : string
+    device_id 2 : string
+}
+
+.RegisterResponse {
+    error_code 0 : integer
+    uid 1 : integer
+}
+
+.PlayerData {
+    name 0 : string
+    level 1 : integer
+    exp 2 : integer
+    reason 3 : integer
+    char_list 4 : []CharData
+    squad 5 : []string
+    desktop_char 6 : string
+    items 7 : []ItemStack
+    permissions 8 : []string
+}
+
+.CharData {
+    id 0 : string
+    template_id 1 : string
+    elite 2 : integer
+    level 3 : integer
+    exp 4 : integer
+    trust 5 : integer
+}
+
+.ItemStack {
+    id 0 : integer
+    amount 1 : integer
+}
+
+login 1 {
+    request LoginRequest
+    response LoginResponse
+}
+
+register 2 {
+    request RegisterRequest
+    response RegisterResponse
+}
