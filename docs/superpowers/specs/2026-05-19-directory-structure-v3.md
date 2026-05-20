@@ -231,33 +231,72 @@ PlayerDataComponent = {
 
 ## 5. 登录流程
 
-### 5.1 完整时序
+### 5.1 消息流设计
+
+**Gate 消息转发机制**：
+- Gate 服务的 `handler.message` 会根据 `connection[fd].agent` 判断消息发送目标
+- 无 agent 时 → 消息发给 Watchdog
+- 有 agent 时 → 消息通过 `skynet.redirect` 重定向到 Agent
+
+**动态转发流程**：
+1. 客户端连接 → Gate → Watchdog
+2. 登录验证成功 → Agent_Mgr 创建 Agent
+3. Agent 准备就绪后 → 沿调用链返回 Agent 地址
+4. Watchdog 调用 `gate:forward(fd, client, agent_address)` 设置转发
+5. 后续该 fd 的消息直接发给 Agent
+
+### 5.2 完整时序
 
 ```
-客户端                    Gate/WD             Login_Master         Login_Worker    DB_Proxy         Agent_Mgr        Agent
-   │                        │                      │                    │              │                  │               │
-   │──TCP连接───────────────>│                      │                    │              │                  │               │
-   │                        │                      │                    │              │                  │               │
-   │──C2G_Login────────────>│                      │                    │              │                  │               │
-   │                        │──login_request──────>│                    │              │                  │               │
-   │                        │                      │                    │              │                  │               │
-   │                        │                      │──检查在线(顶号)────>│              │                  │               │
-   │                        │                      │                    │              │                  │               │
-   │                        │                      │──query_account────>│              │                  │               │
-   │                        │                      │<─bcrypt_hash───────│              │                  │               │
-   │                        │                      │                    │              │                  │               │
-   │                        │                      │──bcrypt_verify───>│              │                  │               │
-   │                        │                      │<─验证结果─────────│              │                  │               │
-   │                        │                      │                    │              │                  │               │
-   │                        │                      │──create_agent─────────────────────>│              │               │
-   │                        │                      │                    │              │               │               │
-   │                        │                      │                    │              │<─agent启动─────────│               │
-   │                        │                      │                    │              │──load_player─────>│               │
-   │                        │                      │                    │              │<─player_data──────────────────────│    │
-   │                        │                      │                    │              │                  │               │
-   │                        │                      │                    │              │                  │<─构建ECS World │
-   │                        │                      │                    │              │                  │               │
-   │<──G2C_Login_Success────│                      │                    │              │                  │               │
+客户端                    Gate              Watchdog          Login_Master         Agent_Mgr         Agent
+   │                        │                   │                    │                  │               │
+   │──TCP连接───────────────>│                   │                    │                  │               │
+   │                        │──connect────────>│                    │                  │               │
+   │                        │                   │                    │                  │               │
+   │──C2G_Login────────────>│──message────────>│                    │                  │               │
+   │                        │                   │──login_request───>│                  │               │
+   │                        │                   │                    │                  │               │
+   │                        │                   │──检查在线(顶号)───>│                  │               │
+   │                        │                   │                    │                  │               │
+   │                        │                   │──query_account───────────────────────>│               │
+   │                        │                   │<─bcrypt_hash─────────────────────────│               │
+   │                        │                   │                    │                  │               │
+   │                        │                   │──bcrypt_verify──>│                  │               │
+   │                        │                   │<─验证结果────────│                  │               │
+   │                        │                   │                    │                  │               │
+   │                        │                   │──create_agent────────────────>│               │               │
+   │                        │                   │                    │<──创建Agent────│               │
+   │                        │                   │                    │                  │               │
+   │                        │                   │                    │<─Agent就绪─────│               │
+   │                        │                   │                    │                  │               │
+   │                        │<─────────────────│<─agent_address────│                  │               │
+   │                        │                   │                    │                  │               │
+   │                        │──forward(fd,─────────────────────────>│                  │               │
+   │                        │    agent_addr)                      │                  │               │
+   │                        │                   │                    │                  │               │
+   │<──G2C_Login_Success────│                   │                    │                  │               │
+   │                        │                   │                    │                  │               │
+   │──后续消息────────────>│                   │                    │                  │               │
+   │                        │──redirect────────────────────────────────────────────>│               │
+   │                        │──直接发给Agent                           │                  │               │
+```
+
+### 5.3 Gate forward 接口
+
+```lua
+-- gate.lua CMD.forward
+function CMD.forward(source, fd, client, address)
+    local c = assert(connection[fd])
+    c.client = client or 0
+    c.agent = address      -- 设置消息重定向目标
+    gateserver.openclient(fd)  -- 开启该 fd 的消息
+end
+```
+
+调用示例：
+```lua
+-- Watchdog 收到 Agent 就绪通知后
+skynet.call(gate, "lua", "forward", fd, client_fd, agent_address)
 ```
 
 ---
@@ -323,4 +362,4 @@ register 2 {
 |------|------|------|
 | v1.0 | 2026-05-15 | 初始设计 |
 | v2.0 | 2026-05-17 | 简化服务间通信，ECS 单实体设计 |
-| v3.0 | 2026-05-19 | 目录结构调整（service/ + src/ 分离） |
+| v3.0 | 2026-05-19 | 目录结构调整（service/ + src/ 分离）+ Gate 消息转发机制 |
