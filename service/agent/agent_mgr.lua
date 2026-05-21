@@ -1,4 +1,5 @@
 -- Agent Manager：管理 Agent 的创建和销毁（OOP 模式）
+-- 单一映射表：uid 登录前代表 fd，登录后代表角色唯一 ID
 local skynet = require "skynet"
 
 -- AgentManager 类
@@ -6,21 +7,44 @@ local AgentManager = {}
 AgentManager.__index = AgentManager
 
 function AgentManager.new()
-    return setmetatable({agents = {}}, AgentManager)
+    local obj = {}
+    obj.agents = {}  -- {[uid] = {agent, fd, gate, uid_type, ...}}
+    return setmetatable(obj, AgentManager)
 end
 
-function AgentManager:create_agent(uid, gate_service)
-    -- 踢掉旧 Agent
-    if self.agents[uid] then
-        pcall(skynet.call, self.agents[uid], "lua", "logout")
+-- 连接时创建 Agent（uid 为 fd）
+function AgentManager:create_agent_by_fd(fd, gate_service)
+    -- 踢掉旧 Agent（如果存在）
+    if self.agents[fd] then
+        self:remove_agent(fd)
     end
 
     -- 创建新 Agent
     local agent_service = skynet.newservice("agent")
-    skynet.call(agent_service, "lua", "start", uid, gate_service)
+    skynet.call(agent_service, "lua", "start", fd, gate_service)
 
-    self.agents[uid] = agent_service
+    self.agents[fd] = {
+        agent = agent_service,
+        fd = fd,
+        gate = gate_service,
+        uid_type = "connection",  -- 登录前状态
+    }
     return agent_service
+end
+
+-- 登录成功后绑定 uid（fd -> player_uid）
+function AgentManager:bind_uid(fd, player_uid)
+    if not self.agents[fd] then
+        return false, "connection not found"
+    end
+
+    -- 同一 Agent，更新 uid
+    local agent_data = self.agents[fd]
+    self.agents[player_uid] = agent_data
+    self.agents[fd] = nil
+    agent_data.uid_type = "player"
+    agent_data.player_uid = player_uid
+    return true
 end
 
 function AgentManager:get_agent(uid)
@@ -28,16 +52,19 @@ function AgentManager:get_agent(uid)
 end
 
 function AgentManager:remove_agent(uid)
-    if self.agents[uid] then
-        pcall(skynet.call, self.agents[uid], "lua", "logout")
+    local agent_data = self.agents[uid]
+    if agent_data then
+        pcall(skynet.call, agent_data.agent, "lua", "logout")
         self.agents[uid] = nil
     end
 end
 
 function AgentManager:list_online_players()
     local online = {}
-    for uid, _ in pairs(self.agents) do
-        table.insert(online, uid)
+    for uid, data in pairs(self.agents) do
+        if data.uid_type == "player" then
+            table.insert(online, uid)
+        end
     end
     return online
 end

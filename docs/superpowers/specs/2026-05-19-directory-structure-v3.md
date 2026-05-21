@@ -176,7 +176,29 @@ skynet.send(service, "lua", "method", param1, param2)
 
 ### 3.5 Agent_Mgr OOP 设计
 
-**设计原则**：使用 Lua 面向对象模式，将 AgentManager 作为类实现，方法与数据绑定。
+**设计原则**：
+- 使用 Lua 面向对象模式
+- 单一映射表 `agents`，uid 作为唯一标识
+- uid 登录前代表 fd，登录后代表角色唯一 ID
+
+**数据结构**：
+```lua
+AgentManager = {
+    agents = {},  -- {[uid] = {agent, fd, gate, uid_type, ...}}
+}
+```
+
+**uid 规则**：
+- `uid_type = "connection"` → uid 实际是 socket fd（登录前）
+- `uid_type = "player"` → uid 是角色唯一 ID（登录后）
+
+**判断函数**：
+```lua
+function AgentManager:is_fd_uid(uid)
+    -- fd 通常是小数字，且 uid_type 为 connection
+    return self.agents[uid] and self.agents[uid].uid_type == "connection"
+end
+```
 
 **类定义**：
 ```lua
@@ -187,16 +209,36 @@ function AgentManager.new()
     return setmetatable({agents = {}}, AgentManager)
 end
 
-function AgentManager:create_agent(uid, gate_service)
-    -- 踢掉旧 Agent
-    if self.agents[uid] then
-        pcall(skynet.call, self.agents[uid], "lua", "logout")
+-- 连接时创建 Agent（uid 为 fd）
+function AgentManager:create_agent_by_fd(fd, gate_service)
+    -- 踢掉旧 Agent（如果存在）
+    if self.agents[fd] then
+        self:remove_agent(fd)
     end
     -- 创建新 Agent
-    local agent = skynet.newservice("agent")
-    skynet.call(agent, "lua", "start", uid, gate_service)
-    self.agents[uid] = agent
-    return agent
+    local agent_service = skynet.newservice("agent")
+    skynet.call(agent_service, "lua", "start", fd, gate_service)
+    self.agents[fd] = {
+        agent = agent_service,
+        fd = fd,
+        gate = gate_service,
+        uid_type = "connection",  -- 登录前状态
+    }
+    return agent_service
+end
+
+-- 登录成功后绑定 uid（fd -> player_uid）
+function AgentManager:bind_uid(fd, player_uid)
+    if not self.agents[fd] then
+        return false, "connection not found"
+    end
+    -- 同一 Agent，更新 uid
+    local agent_data = self.agents[fd]
+    self.agents[player_uid] = agent_data
+    self.agents[fd] = nil
+    agent_data.uid_type = "player"
+    agent_data.player_uid = player_uid
+    return true
 end
 
 function AgentManager:get_agent(uid)
@@ -204,16 +246,19 @@ function AgentManager:get_agent(uid)
 end
 
 function AgentManager:remove_agent(uid)
-    if self.agents[uid] then
-        pcall(skynet.call, self.agents[uid], "lua", "logout")
+    local agent_data = self.agents[uid]
+    if agent_data then
+        pcall(skynet.call, agent_data.agent, "lua", "logout")
         self.agents[uid] = nil
     end
 end
 
 function AgentManager:list_online_players()
     local online = {}
-    for uid, _ in pairs(self.agents) do
-        table.insert(online, uid)
+    for uid, data in pairs(self.agents) do
+        if data.uid_type == "player" then
+            table.insert(online, uid)
+        end
     end
     return online
 end
@@ -431,3 +476,4 @@ register 2 {
 | v2.0 | 2026-05-17 | 简化服务间通信，ECS 单实体设计 |
 | v3.0 | 2026-05-19 | 目录结构调整（service/ + src/ 分离）+ Gate 消息转发机制 |
 | v3.1 | 2026-05-21 | Agent_Mgr OOP 重构 |
+| v3.2 | 2026-05-21 | Agent_Mgr 单一映射 + uid_type 设计 |
