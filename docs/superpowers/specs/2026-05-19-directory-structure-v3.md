@@ -174,6 +174,73 @@ skynet.send(service, "lua", "method", param1, param2)
 | DB_Proxy | `query_account`, `create_account`, `load_player`, `save_player` |
 | Agent | `query_player_data`, `get_fight_power`, `handle_game_message` |
 
+### 3.5 Agent_Mgr OOP 设计
+
+**设计原则**：使用 Lua 面向对象模式，将 AgentManager 作为类实现，方法与数据绑定。
+
+**类定义**：
+```lua
+local AgentManager = {}
+AgentManager.__index = AgentManager
+
+function AgentManager.new()
+    return setmetatable({agents = {}}, AgentManager)
+end
+
+function AgentManager:create_agent(uid, gate_service)
+    -- 踢掉旧 Agent
+    if self.agents[uid] then
+        pcall(skynet.call, self.agents[uid], "lua", "logout")
+    end
+    -- 创建新 Agent
+    local agent = skynet.newservice("agent")
+    skynet.call(agent, "lua", "start", uid, gate_service)
+    self.agents[uid] = agent
+    return agent
+end
+
+function AgentManager:get_agent(uid)
+    return self.agents[uid]
+end
+
+function AgentManager:remove_agent(uid)
+    if self.agents[uid] then
+        pcall(skynet.call, self.agents[uid], "lua", "logout")
+        self.agents[uid] = nil
+    end
+end
+
+function AgentManager:list_online_players()
+    local online = {}
+    for uid, _ in pairs(self.agents) do
+        table.insert(online, uid)
+    end
+    return online
+end
+```
+
+**Skynet 入口**：
+```lua
+local manager = AgentManager.new()
+
+skynet.start(function()
+    skynet.dispatch("lua", function(session, source, cmd, ...)
+        local f = manager[cmd]
+        if f then
+            local ret = f(manager, ...)
+            if session > 0 then
+                skynet.ret(skynet.pack(ret))
+            end
+        end
+    end)
+end)
+```
+
+**优势**：
+- `self.agents` 显式管理，不依赖闭包变量
+- 方法与数据绑定，职责清晰
+- 便于后续扩展（如添加 `get_all_agents()`、`broadcast()` 等）
+
 ---
 
 ## 4. ECS 设计
@@ -363,3 +430,4 @@ register 2 {
 | v1.0 | 2026-05-15 | 初始设计 |
 | v2.0 | 2026-05-17 | 简化服务间通信，ECS 单实体设计 |
 | v3.0 | 2026-05-19 | 目录结构调整（service/ + src/ 分离）+ Gate 消息转发机制 |
+| v3.1 | 2026-05-21 | Agent_Mgr OOP 重构 |
