@@ -13,20 +13,21 @@ function AgentManager.new()
 end
 
 -- 连接时创建 Agent（uid 为 fd）
-function AgentManager:create_agent_by_fd(fd, gate_service)
+function AgentManager:create_agent(conf)
     -- 踢掉旧 Agent（如果存在）
+    local fd = conf.fd
     if self.agents[fd] then
-        self:remove_agent(fd)
+        self:remove_agent(fd)   -- 出现重复的fd 通常只有旧的fd c层的ss已经释放了, 但是lua层没有处理, 所以保险期间 还是把旧Agent关掉
     end
 
     -- 创建新 Agent
     local agent_service = skynet.newservice("agent")
-    skynet.call(agent_service, "lua", "start", fd, gate_service)
+    skynet.call(agent_service, "lua", "start", conf)
 
     self.agents[fd] = {
         agent = agent_service,
         fd = fd,
-        gate = gate_service,
+        gate = conf.gate,
         uid_type = "connection",  -- 登录前状态
     }
     return agent_service

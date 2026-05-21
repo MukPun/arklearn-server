@@ -1,18 +1,29 @@
 local skynet = require "skynet"
-local databaseConfig = require "etc.database"
 
 skynet.start(function()
-	skynet.error("Server start")
+	skynet.error("ArkServer starting...")
 	if not skynet.getenv "daemon" then
 		local console = skynet.newservice("console")
 	end
-	skynet.newservice("debug_console",8000)
+	-- 启动监控
+	skynet.newservice("debug_console", 8000)
+
+	-- 加载协议
 	local proto = skynet.uniqueservice "protoloader"
 	skynet.call(proto, "lua", "load", {
 		"proto.c2s",
 		"proto.s2c",
 	})
-	local hub = skynet.uniqueservice "hub"
-	skynet.call(hub, "lua", "open", "0.0.0.0", 5678)
+
+	-- DbProxy
+	local dbproxy = skynet.newservice("db.dbproxy")
+	-- 启动Login_Manager
+	local login_manager = skynet.newservice("login.login_manager")
+	-- 启动Agent_Manager
+	local agent_manager = skynet.newservice("agent.agent_manager")
+	-- 启动 Gate 这里先用skynet提供的  GateServer
+	local watchdog = skynet.newservice("gate.watchdog")
+	local addr, port = skynet.call(watchdog, "lua", "start")
+	skynet.error("Watchdog listen on " .. addr .. ":" .. port)
 	skynet.exit()
 end)

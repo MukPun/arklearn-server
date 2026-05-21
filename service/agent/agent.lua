@@ -1,17 +1,25 @@
 -- Agent 服务：玩家在服务端的代理
 local skynet = require "skynet"
 local AgentWorld = require "agent.world"
+local const = require "common.const"
 
-local agent = {
-    world = nil,
-    uid = nil,
-}
+-- Agent类
+local Agent = {}
+Agent.__index = Agent
 
-local CMD = {}
+function Agent.new()
+    local obj = {}
+    obj.gate = nil              -- gate 服务句柄
+    obj.socketFd = nil          -- socket 唯一id
+    obj.world = nil
+    obj.uid = nil
+    obj.state = const.loginState.LOGIN_STATE_NONE      -- Agent 状态 未登录、登录中、登录成功、登录失败
+    return setmetatable(obj, Agent)
+end
 
-function CMD.start(uid, gate_service)
-    agent.uid = uid
-    agent.gate_service = gate_service
+-- Agent初始化入口
+function Agent:start(conf)
+    self.gate = conf.gate
 
     -- 创建 ECS World
     agent.world = AgentWorld.new(uid)
@@ -23,14 +31,14 @@ function CMD.start(uid, gate_service)
     return true
 end
 
-function CMD.query_player_data(uid)
+function Agent:query_player_data(uid)
     if uid ~= agent.uid then
         return nil
     end
     return agent.world:get_component(agent.uid, "PlayerDataComponent")
 end
 
-function CMD.get_fight_power(uid)
+function Agent:get_fight_power(uid)
     local player_data = agent.world:get_component(agent.uid, "PlayerDataComponent")
     if not player_data then
         return 0
@@ -43,7 +51,7 @@ function CMD.get_fight_power(uid)
     return power
 end
 
-function CMD.handle_game_message(cmd, ...)
+function Agent:handle_game_message(cmd, ...)
     local f = agent[cmd] or CMD[cmd]
     if f then
         return f(...)
@@ -51,7 +59,7 @@ function CMD.handle_game_message(cmd, ...)
     return {error_code = 1003, message = "unknown command"}
 end
 
-function CMD.logout()
+function Agent:logout()
     -- 保存数据
     local db_proxy = skynet.uniqueservice("db_proxy", "lua")
     local player_data = agent.world:get_component(agent.uid, "PlayerDataComponent")
@@ -60,11 +68,13 @@ function CMD.logout()
     end
 end
 
+local agentObj = Agent.new()
+
 skynet.start(function()
     skynet.dispatch("lua", function(session, source, cmd, ...)
-        local f = CMD[cmd]
+        local f = agentObj[cmd]
         if f then
-            local ret = f(...)
+            local ret = f(agentObj, ...)
             if session > 0 then
                 skynet.ret(skynet.pack(ret))
             end

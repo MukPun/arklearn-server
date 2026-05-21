@@ -1,3 +1,11 @@
+.package {
+	type 0 : integer
+	session 1 : integer
+	ud 2 : string
+}
+
+# 公共结构体
+
 .LoginRequest {
     account 0 : string
     password_hash 1 : string
@@ -48,6 +56,9 @@
     id 0 : integer
     amount 1 : integer
 }
+
+
+# 定义协议
 
 login 1 {
     request LoginRequest

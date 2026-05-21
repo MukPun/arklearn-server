@@ -45,4 +45,10 @@ function db_proxy.create_player(player_data)
     return player_data
 end
 
+-- 注册服务处理函数
+skynet.start(function()
+
+
+end)
+
 return db_proxy

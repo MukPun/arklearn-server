@@ -1,58 +1,104 @@
--- Gate 服务：处理网络连接和协议解析
 local skynet = require "skynet"
-local sproto = require "sproto"
-local netpack = require "skynet.netpack"
+local gateserver = require "snax.gateserver"
+local util = require "common.util"
+local struct = require "common.struct"
 
-local gate = {}
-local sockets = {}
-local handshake = {}
+local watchdog
+local connection = {}	-- fd -> connection : { fd , client, agent , ip, mode }
 
--- 加载 sproto 协议
-local login_proto = require "proto.login"
+skynet.register_protocol {
+	name = "client",
+	id = skynet.PTYPE_CLIENT,
+}
 
-function gate.open(conf)
-    gate.conf = conf
-    gate.host = conf.host or "0.0.0.0"
-    gate.port = conf.port or 8888
-    gate.maxclient = conf.maxclient or 64
-    gate.servername = conf.servername or "ark_server"
-
-    -- 启动监听
-    skynet.call("simpledb", "lua", "listen", gate.host, gate.port)
-
-    -- 注册 socket 回调
-    -- 这里简化处理，实际需要使用 skynet.socket
+local function newLinkObj(fd, addr)
+	local linkObj = Deepcopy(struct.login.linkObj)
+	linkObj.fd = fd
+	linkObj.ip = addr
+	return linkObj
 end
 
-function gate.close()
-    for fd, _ in pairs(sockets) do
-        skynet.call(gate.self, "lua", "kick", fd)
-    end
+local handler = {}
+
+function handler.open(source, conf)
+	watchdog = conf.watchdog or source
+	return conf.address, conf.port
 end
 
-function gate.start(conf)
-    gate.conf = conf
+function handler.message(fd, msg, sz)
+	-- recv a package, forward it
+	local c = connection[fd]
+	local agent = c.agent
+	if agent then
+		-- 这里由gate重定向了数据直接发送到agent
+		-- It's safe to redirect msg directly , gateserver framework will not free msg.
+		skynet.redirect(agent, c.client, "client", fd, msg, sz)
+	else
+		skynet.send(watchdog, "lua", "socket", "data", fd, skynet.tostring(msg, sz))
+		-- skynet.tostring will copy msg to a string, so we must free msg here.
+		skynet.trash(msg,sz)
+	end
 end
 
-function gate.data(fd, msg, size)
-    -- 处理接收到的数据
+-- socket accept成功
+function handler.connect(fd, addr)
+	local linkObj = newLinkObj(fd, addr)
+	connection[fd] = linkObj
+	skynet.send(watchdog, "lua", "socket", "open", linkObj)
 end
 
-function gate.disconnect(fd)
-    -- 处理断开连接
+local function unforward(c)
+	if c.agent then
+		c.agent = nil
+		c.client = nil
+	end
 end
 
-skynet.start(function()
-    skynet.dispatch("lua", function(session, source, cmd, ...)
-        if cmd == "socket" then
-            -- socket 事件处理
-        else
-            local f = gate[cmd]
-            if f then
-                f(...)
-            end
-        end
-    end)
-end)
+local function close_fd(fd)
+	local c = connection[fd]
+	if c then
+		unforward(c)
+		connection[fd] = nil
+	end
+end
 
-return gate
+function handler.disconnect(fd)
+	close_fd(fd)
+	skynet.send(watchdog, "lua", "socket", "close", fd)
+end
+
+function handler.error(fd, msg)
+	close_fd(fd)
+	skynet.send(watchdog, "lua", "socket", "error", fd, msg)
+end
+
+function handler.warning(fd, size)
+	skynet.send(watchdog, "lua", "socket", "warning", fd, size)
+end
+
+local CMD = {}
+
+function CMD.forward(source, fd, client, address)
+	local c = assert(connection[fd])
+	unforward(c)
+	c.client = client or 0
+	c.agent = address or source
+	gateserver.openclient(fd)
+end
+
+function CMD.accept(source, fd)
+	local c = assert(connection[fd])
+	unforward(c)
+	gateserver.openclient(fd)
+end
+
+function CMD.kick(source, fd)
+	gateserver.closeclient(fd)
+end
+
+function handler.command(cmd, source, ...)
+	local f = assert(CMD[cmd])
+	return f(source, ...)
+end
+
+gateserver.start(handler)
