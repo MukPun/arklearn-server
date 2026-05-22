@@ -1,5 +1,7 @@
 return {
     host = "127.0.0.1",
     port = 27017,
-    database = "ark_server",
+    username = "admin",
+    password = "ark1998219",
+    authdb = "admin",
 }

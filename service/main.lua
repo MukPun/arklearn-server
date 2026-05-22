@@ -16,7 +16,10 @@ skynet.start(function()
 	})
 
 	-- DbProxy
-	local dbproxy = skynet.newservice("db.dbproxy")
+	-- 初始化 DB Proxy
+	local dbProxy = skynet.uniqueservice("db.dbproxy")
+	skynet.call(dbProxy, "lua", "init")
+
 	-- 启动Login_Manager
 	local login_manager = skynet.newservice("login.login_manager")
 	-- 启动Agent_Manager

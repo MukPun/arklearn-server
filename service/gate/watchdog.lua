@@ -1,3 +1,4 @@
+-- 消息业务逻辑
 local skynet = require "skynet"
 local config = require "etc.gate"
 local struct = require "common.struct"
@@ -6,31 +7,38 @@ local CMD = {}
 local SOCKET = {}
 local gate
 local agent = {}
-local createingAgent = {}		-- 创建中的Agent
+local linkObjs = {}		-- 客户端连接 fd -> struct.login.linkObj
 
-local function checkScoektAccept(fd, addr)
+local function checklinkObjs(linkObj)
+	local fd, addr = linkObj.fd, linkObj.ip
 	-- 检查客户端连接
-	if createingAgent[fd] then
-		skynet.error("Client " .. fd .. " is creating agent")
-		return false
+	if linkObjs[fd] then
+		local msg = "Client " .. fd .. " is already connecting"
+		skynet.error(msg)
+		return false, msg
 	end
+	-- 检查黑名单
+
 	-- 检查 Agent数量
 
 	-- 检查 登录队列情况
-	
-	return true
+
+	return true, ""
 end
 
 -- 客户端连接成功 accept 后调用
 -- @param linkObj struct.login.linkObj @链接对象
 function SOCKET.open(linkObj)
-	if not checkScoektAccept(linkObj.fd, linkObj.addr) then
+	-- 连接管理
+	local ret, msg = checklinkObjs(linkObj)
+	if not ret then
+		skynet.call(gate, "lua", "kick", linkObj.fd)
 		return
 	end
-	-- 优化为向AgentManager发送消息 创建Agent
+	-- watchdog 只管理连接状态
 	skynet.error("New client from : " .. linkObj.addr)
-	table.insert(createingAgent, linkObj.fd)
-	skynet.call("agent_mgr", "lua", "create_agent", {gate = gate, client = linkObj.fd, watchdog = skynet.self()})
+	table.insert(linkObjs, linkObj.fd)
+	skynet.send(gate, "lua", "setRoute", skynet.self())
 end
 
 

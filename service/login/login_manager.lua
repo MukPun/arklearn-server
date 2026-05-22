@@ -15,10 +15,6 @@ local worker_count = 8
 local login_request_queue = {}
 
 function CMD.init(conf)
-    -- 初始化 DB Proxy
-    db_proxy = skynet.uniqueservice("db_proxy", "lua")
-    skynet.call(db_proxy, "lua", "init", conf.db)
-
     -- 初始化 Worker 池
     for i = 1, worker_count do
         worker_pools[i] = skynet.newservice("login_worker")

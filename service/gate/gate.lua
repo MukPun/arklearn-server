@@ -1,10 +1,11 @@
+-- 消息路由 只做消息转发
 local skynet = require "skynet"
 local gateserver = require "snax.gateserver"
 local util = require "common.util"
 local struct = require "common.struct"
 
 local watchdog
-local connection = {}	-- fd -> connection : { fd , client, agent , ip, mode }
+local connection = {}	-- fd -> connection : { fd , client, desServer , ip, mode }
 
 skynet.register_protocol {
 	name = "client",
@@ -28,11 +29,11 @@ end
 function handler.message(fd, msg, sz)
 	-- recv a package, forward it
 	local c = connection[fd]
-	local agent = c.agent
-	if agent then
-		-- 这里由gate重定向了数据直接发送到agent
+	local desServer = c.desServer
+	if desServer then
+		-- 这里由gate重定向了数据直接发送到desServer
 		-- It's safe to redirect msg directly , gateserver framework will not free msg.
-		skynet.redirect(agent, c.client, "client", fd, msg, sz)
+		skynet.redirect(desServer, c.client, "client", fd, msg, sz)
 	else
 		skynet.send(watchdog, "lua", "socket", "data", fd, skynet.tostring(msg, sz))
 		-- skynet.tostring will copy msg to a string, so we must free msg here.
@@ -94,6 +95,15 @@ end
 
 function CMD.kick(source, fd)
 	gateserver.closeclient(fd)
+end
+
+-- 设置路由 这里先简单的实现, 因为这里只能转发到 注册了client协议的服务
+function CMD.setRoute(source, fd, desServer)
+	local c = connection[fd]
+	if c then
+		c.desServer = desServer
+		skynet.error("[gate] setRoute fd:", fd, "desServer:", desServer, "source: ", source )
+	end
 end
 
 function handler.command(cmd, source, ...)
