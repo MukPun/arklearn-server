@@ -29,6 +29,7 @@ local function test_auth()
 
 	ok, err, ret = db.testcoll:safe_insert({test_key = 1});
 	assert(ok and ret and ret.n == 1, err)
+    print("Test auth success")
 end
 
 

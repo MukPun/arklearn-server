@@ -21,7 +21,7 @@ skynet.start(function()
 	skynet.call(dbProxy, "lua", "init")
 
 	-- 启动Login_Manager
-	local login_manager = skynet.newservice("login.login_manager")
+	local login_manager = skynet.newservice("login/login_manager")
 	-- 启动Agent_Manager
 	local agent_manager = skynet.newservice("agent.agent_manager")
 	-- 启动 Gate 这里先用skynet提供的  GateServer

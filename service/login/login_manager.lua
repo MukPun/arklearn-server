@@ -7,7 +7,7 @@ local sprotoloader = require "sprotoloader"
 local core = require "sproto.core"
 
 -- 加载协议
-local protoloader = require "service.protoloader"
+local protoloader = require "protoloader"
 protoloader.load({"proto.c2s", "proto.s2c"})
 
 local c2s_proto = sprotoloader.load(protoloader.index("proto.c2s"))
