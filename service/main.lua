@@ -17,7 +17,7 @@ skynet.start(function()
 
 	-- DbProxy
 	-- 初始化 DB Proxy
-	local dbProxy = skynet.uniqueservice("db.dbproxy")
+	local dbProxy = skynet.uniqueservice("db/db_proxy")
 	skynet.call(dbProxy, "lua", "init")
 
 	-- 启动Login_Manager

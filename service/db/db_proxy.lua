@@ -1,7 +1,7 @@
 local skynet = require "skynet"
 local mongo = require "skynet.db.mongo"
 local bson = require "bson"
-local conf = require "etc.database"
+local conf = require "database_cfg"
 
 local db_proxy = {}
 local db_instance = nil

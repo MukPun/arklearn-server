@@ -1,6 +1,6 @@
 -- 消息业务逻辑  处理linkObj对象
 local skynet = require "skynet"
-local config = require "etc.gate"
+local config = require "gate_cfg"
 local struct = require "common.struct"
 
 local CMD = {}
