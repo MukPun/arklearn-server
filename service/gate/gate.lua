@@ -5,7 +5,7 @@ local util = require "common.util"
 local struct = require "common.struct"
 
 local watchdog
-local connection = {}	-- fd -> connection : { fd , client, desServer , ip, mode }
+local connection = {}	-- fd -> connection : { fd , client, desServer , ip }
 
 skynet.register_protocol {
 	name = "client",
@@ -44,6 +44,7 @@ end
 -- socket accept成功
 function handler.connect(fd, addr)
 	local linkObj = newLinkObj(fd, addr)
+	-- 初始 desServer 为 nil，消息走 else 到 watchdog 校验
 	connection[fd] = linkObj
 	skynet.send(watchdog, "lua", "socket", "open", linkObj)
 end
@@ -52,6 +53,9 @@ local function unforward(c)
 	if c.agent then
 		c.agent = nil
 		c.client = nil
+	end
+	if c.desServer then
+		c.desServer = nil
 	end
 end
 
@@ -104,6 +108,12 @@ function CMD.setRoute(source, fd, desServer)
 		c.desServer = desServer
 		skynet.error("[gate] setRoute fd:", fd, "desServer:", desServer, "source: ", source )
 	end
+end
+
+-- 设置客户端标识（用于 redirect 回复）
+function CMD.set_client(source, fd, client)
+	local c = assert(connection[fd])
+	c.client = client or 0
 end
 
 function handler.command(cmd, source, ...)

@@ -1,4 +1,4 @@
--- 消息业务逻辑
+-- 消息业务逻辑  处理linkObj对象
 local skynet = require "skynet"
 local config = require "etc.gate"
 local struct = require "common.struct"
@@ -8,7 +8,9 @@ local SOCKET = {}
 local gate
 local agent = {}
 local linkObjs = {}		-- 客户端连接 fd -> struct.login.linkObj
+local login_manager
 
+-- 检查连接
 local function checklinkObjs(linkObj)
 	local fd, addr = linkObj.fd, linkObj.ip
 	-- 检查客户端连接
@@ -26,7 +28,7 @@ local function checklinkObjs(linkObj)
 	return true, ""
 end
 
--- 客户端连接成功 accept 后调用
+-- 客户端连接成功 accept 后 gate调用
 -- @param linkObj struct.login.linkObj @链接对象
 function SOCKET.open(linkObj)
 	-- 连接管理
@@ -38,7 +40,8 @@ function SOCKET.open(linkObj)
 	-- watchdog 只管理连接状态
 	skynet.error("New client from : " .. linkObj.addr)
 	table.insert(linkObjs, linkObj.fd)
-	skynet.send(gate, "lua", "setRoute", skynet.self())
+	-- 校验通过后，设置 desServer 为 login_manager
+	skynet.send(gate, "lua", "setRoute", linkObj.fd, login_manager)
 end
 
 
@@ -70,7 +73,10 @@ end
 function SOCKET.data(fd, msg)
 end
 
+-- 启服调用
 function CMD.start()
+	-- 获取 login_manager 地址
+	login_manager = skynet.uniqueservice("login.login_manager")
 	return skynet.call(gate, "lua", "open" , {
 		port = config.port or 8888,
 		maxclient = config.maxclient or 64,
