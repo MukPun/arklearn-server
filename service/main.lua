@@ -16,10 +16,10 @@ skynet.start(function()
 
 	local loginServer = skynet.newservice("login/login_manager")
 
-	-- 启动 Gate
-	local watchdog = skynet.newservice("gate/watchdog")
-	local addr, port = skynet.call(watchdog, "lua", "start", loginServer)
-	skynet.error("Watchdog listen on " .. addr .. ":" .. port)
+	-- -- 启动 Gate
+	-- local watchdog = skynet.newservice("gate/watchdog")
+	-- local addr, port = skynet.call(watchdog, "lua", "start", loginServer)
+	-- skynet.error("Watchdog listen on " .. addr .. ":" .. port)
 
 	-- -- DbProxy
 	-- -- 初始化 DB Proxy

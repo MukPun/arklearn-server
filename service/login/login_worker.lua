@@ -1,8 +1,9 @@
 -- Login Worker：执行 密码验证，不阻塞主服务
+require "skynet.manager"
 local skynet = require "skynet"
 local crypt = require "skynet.crypt"
 local socket = require "skynet.socket"
-local db_config = require "etc.database_cfg"
+local db_config = require "database_cfg"
 
 local socket_error = {}
 
@@ -114,5 +115,4 @@ skynet.start(function()
             end
         end
     end)
-    skynet.register("login_worker")
 end)

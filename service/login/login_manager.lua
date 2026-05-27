@@ -1,22 +1,16 @@
 -- Login Manager：登录主服务，处理客户端的
 -- 连接请求
 -- 账密校验
+require "skynet.manager"
 local skynet = require "skynet"
 local crypt = require "skynet.crypt"
-local core = require "sproto.core"
-local config = require "etc.login_cfg"
+local config = require "login_cfg"
 local socket = require "skynet.socket"
-
--- 获取 .package 类型用于解析 header
-local package_type = core.querytype(c2s_proto.__cobj, "package")
 
 local db_proxy = nil
 local worker_pools = {}         -- {workeId -> workerServerId}
 local user_online = {}  -- 在线的玩家 {uid = {agent, device_id, token, gate, fd}} 
 local user_login = {}       -- 登录中的用户
-local queue_max = 1000
-local frame_limit = 50
-local queue_timeout = 10
 local worker_count = 8
 local worker_index = 1      -- 当前workeId
 local socket_error = {}
@@ -34,144 +28,6 @@ end
 
 local function write(service, fd, text)
 	assert_socket(service, socket.write(fd, text), fd)
-end
-
-
--- 发送 sproto 响应
-local function send_response(gate_service, client, fd, tag, protoname, response_data)
-    -- 获取协议信息
-    local p = s2c_proto:queryproto(protoname)
-    local resp = s2c_proto:encode(p.response, response_data)
-
-    -- 构建 package header
-    local header_tmp = {
-        type = tag,
-        session = 0,
-        ud = "",
-    }
-    local header = s2c_proto:encode(".package", header_tmp)
-    local packed = s2c_proto:pack(header .. resp)
-
-    skynet.redirect(gate_service, client, "client", fd, packed, #packed)
-end
-
-local function handle_login(fd, content, gate_service, client)
-    -- 解码登录请求
-    local request = c2s_proto:decode("LoginRequest", content)
-    local account = request.account
-    local password_hash = request.password_hash
-    local device_id = request.device_id
-
-    skynet.error("Login request:", account, "device:", device_id)
-
-    -- 检查是否在线（顶号）
-    for uid, info in pairs(online_players) do
-        if info.name == account then
-            -- 顶号：踢掉旧连接
-            skynet.call(info.gate, "lua", "kick", info.fd)
-            online_players[uid] = nil
-        end
-    end
-
-    -- 查询账号
-    local account_data = skynet.call(db_proxy, "lua", "query_account", account)
-    if not account_data then
-        send_response(gate_service, client, fd, 2, "login", {error_code = 2})
-        return
-    end
-
-    -- 派发验证给 Worker
-    local worker = worker_pools[math.random(1, worker_count)]
-    local ok = skynet.call(worker, "lua", "verify", password_hash, account_data.password)
-    if not ok then
-        send_response(gate_service, client, fd, 2, "login", {error_code = 3})
-        return
-    end
-
-    -- 创建 Agent
-    local agent_mgr = skynet.uniqueservice("agent_mgr")
-    local agent = skynet.call(agent_mgr, "lua", "create_agent", {
-        fd = fd,
-        gate = gate_service,
-        uid = account_data.uid,
-    })
-
-    -- 生成 token
-    local token = crypt.base64encode(crypt.randomkey())
-
-    -- 记录在线
-    online_players[account_data.uid] = {
-        name = account,
-        agent = agent,
-        gate = gate_service,
-        fd = fd,
-        token = token,
-        device_id = device_id,
-    }
-
-    -- 切换 Gate 路由目标到 Agent
-    skynet.call(gate_service, "lua", "setRoute", fd, agent)
-    skynet.call(gate_service, "lua", "set_client", fd, client)
-
-    -- 通知 Agent 登录成功
-    skynet.send(agent, "lua", "on_login_success", fd, client, account_data.uid)
-
-    -- 发送登录成功响应
-    send_response(gate_service, client, fd, 2, "login", {
-        error_code = 0,
-        uid = account_data.uid,
-        token = token,
-    })
-end
-
-local function handle_register(fd, content, gate_service, client)
-    -- 解码注册请求
-    local request = c2s_proto:decode("RegisterRequest", content)
-    local account = request.account
-    local password_hash = request.password_hash
-    local device_id = request.device_id
-
-    skynet.error("Register request:", account)
-
-    -- 查询账号是否存在
-    local exist = skynet.call(db_proxy, "lua", "query_account", account)
-    if exist then
-        send_response(gate_service, client, fd, 2, "register", {error_code = 1})
-        return
-    end
-
-    -- 创建账号
-    local uid = os.time()  -- 临时 uid 生成
-    local account_data = {
-        name = account,
-        password = password_hash,
-        uid = uid,
-    }
-    local ok, err = skynet.call(db_proxy, "lua", "create_account", account_data)
-    if not ok then
-        send_response(gate_service, client, fd, 2, "register", {error_code = 3, error = err})
-        return
-    end
-
-    -- 创建玩家数据
-    local player_data = {
-        uid = uid,
-        name = account,
-        level = 1,
-        exp = 0,
-        reason = 100,
-        charList = {},
-        squad = {},
-        desktopChar = "",
-        items = {},
-        permissions = {},
-    }
-    skynet.call(db_proxy, "lua", "create_player", player_data)
-
-    send_response(gate_service, client, fd, 2, "register", {
-        error_code = 0,
-        uid = uid,
-    })
 end
 
 
@@ -264,7 +120,7 @@ local CMD = {}
 -- 启动 Manager：登录主服务
 local function launchManager()
     -- 注册socket监听端口 单独处理客户端发来的协议 处理 登录
-    skynet.error("[Ark Login Server] launch manager...")
+    skynet.error("[Ark Login Manager] launch manager...")
 	local workerCount = config.worker_count or 8
 	assert(workerCount > 0)
 	local host = config.host or "0.0.0.0"
@@ -278,9 +134,10 @@ local function launchManager()
     -- 初始化 Worker 池
     for i = 1, worker_count do
         worker_pools[i] = skynet.newservice("login/login_worker")
+        skynet.error(string.format("[Ark Login worker] id: %d", i))
     end
 
-	skynet.error(string.format("[Ark Login Server] login server listen at : %s %d", host, port))
+	skynet.error(string.format("[Ark Login Manager] login server listen at : %s %d", host, port))
     -- 启动监听 待回调后执行 accept
     local socketId = socket.listen(host, port)
     socket.start(socketId, accept)
@@ -289,7 +146,7 @@ end
 -- 服务启动
 skynet.start(function()
     -- launch Manager 
-    skynet.error("[Ark Login Server] login manager starting...")
+    skynet.error("[Ark Login Manager] login manager starting...")
     skynet.register(config.name or "login_manager")
     launchManager()
 end)
