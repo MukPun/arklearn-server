@@ -4,5 +4,6 @@ return {
     username = "admin",
     password = "ark1998219",
     authdb = "admin",
-    database = "arkServer"
+    database = "arkServer",
+    name = "db_proxy",
 }

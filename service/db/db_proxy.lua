@@ -71,6 +71,7 @@ skynet.start(function()
 		print("Test auth")
 		test_auth()
 	end
+    skynet.register("db_proxy")
 	skynet.dispatch("lua", function(session, source, cmd, ...)
         local f = db_proxy[cmd]
         if f then

@@ -73,7 +73,7 @@ end
 function SOCKET.data(fd, msg)
 end
 
--- 启服调用
+-- 启服调用 启动gate 监听端口
 function CMD.start()
 	-- 获取 login_manager 地址
 	login_manager = skynet.uniqueservice("login.login_manager")

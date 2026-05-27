@@ -1,4 +1,4 @@
-local skynet = require "skynet"
+-- 负责加载协议的服务
 local sprotoparser = require "sprotoparser"
 local sprotoloader = require "sprotoloader"
 local service = require "service"
@@ -24,7 +24,7 @@ function loader.load(list)
 	end
 end
 
-function loader.index(name)
+function loader.index(name)		-- 获取协议索引
 	return data[name]
 end
 

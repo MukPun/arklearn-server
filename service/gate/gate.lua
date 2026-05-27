@@ -19,14 +19,14 @@ local function newLinkObj(fd, addr)
 	return linkObj
 end
 
-local handler = {}
+local gate = {}
 
-function handler.open(source, conf)
+function gate.open(source, conf)
 	watchdog = conf.watchdog or source
 	return conf.address, conf.port
 end
 
-function handler.message(fd, msg, sz)
+function gate.message(fd, msg, sz)
 	-- recv a package, forward it
 	local c = connection[fd]
 	local desServer = c.desServer
@@ -42,7 +42,7 @@ function handler.message(fd, msg, sz)
 end
 
 -- socket accept成功
-function handler.connect(fd, addr)
+function gate.connect(fd, addr)
 	local linkObj = newLinkObj(fd, addr)
 	-- 初始 desServer 为 nil，消息走 else 到 watchdog 校验
 	connection[fd] = linkObj
@@ -67,18 +67,26 @@ local function close_fd(fd)
 	end
 end
 
-function handler.disconnect(fd)
+function gate.disconnect(fd)
 	close_fd(fd)
 	skynet.send(watchdog, "lua", "socket", "close", fd)
 end
 
-function handler.error(fd, msg)
+function gate.error(fd, msg)
 	close_fd(fd)
 	skynet.send(watchdog, "lua", "socket", "error", fd, msg)
 end
 
-function handler.warning(fd, size)
+function gate.warning(fd, size)
 	skynet.send(watchdog, "lua", "socket", "warning", fd, size)
+end
+
+
+-- call by self (when gate open)
+function gate.register_handler(name)
+	servername = name
+	-- 注册为玩家登录目标服务器
+	skynet.call(loginservice, "lua", "register_gate", servername, skynet.self())
 end
 
 local CMD = {}
@@ -116,9 +124,9 @@ function CMD.set_client(source, fd, client)
 	c.client = client or 0
 end
 
-function handler.command(cmd, source, ...)
+function gate.command(cmd, source, ...)
 	local f = assert(CMD[cmd])
 	return f(source, ...)
 end
 
-gateserver.start(handler)
+gateserver.start(gate)
