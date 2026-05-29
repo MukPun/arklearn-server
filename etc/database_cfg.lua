@@ -6,4 +6,5 @@ return {
     authdb = "admin",
     database = "arkServer",
     name = "db_proxy",
+    collections = {"accounts", "players"},  -- 新增：允许访问的集合列表
 }
