@@ -3,7 +3,6 @@ require "skynet.manager"
 local skynet = require "skynet"
 local crypt = require "skynet.crypt"
 local socket = require "skynet.socket"
-local db_config = require "database_cfg"
 
 local socket_error = {}
 
@@ -15,16 +14,11 @@ local function auth_handler(token)
 	server = crypt.base64decode(server)
 	password = crypt.base64decode(password)
     skynet.error("[Ark login worker] auth_handler: ", user, server, password)
-    -- 请求MongoDB user 获取角色数据进行校验
-    local accountServer = skynet.localname(db_config.name)
-    local is_succeed, result = skynet.call(accountServer, "lua", "select_by_key", "Account", "account_id", user)
-    if is_succeed then
-        local account_data = result and result[1]
-        if account_data and account_data.uid and account_data.password then
-            assert(password == account_data.password, "Invalid password")
-        end
+    -- 请求MongoDB获取账号数据进行校验
+    local account_data = skynet.call("dbserver", "lua", "findOne", "accounts", {name = user})
+    if account_data and account_data.uid and account_data.password then
+        assert(password == account_data.password, "Invalid password")
     else
-        -- 查询数据库失败
         assert(false, "Invalid account")
     end
 	return server, user
