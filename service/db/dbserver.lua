@@ -1,25 +1,48 @@
 local skynet = require "skynet"
 local mongo = require "skynet.db.mongo"
 local bson = require "bson"
+local conf = require "database_cfg"
+
 
 local dbserver = {}
 local db_instance = nil
-local allowed_collections = {}
+local black_list = {}
+
+
+local function test_auth()
+    skynet.error("Test auth start")
+	local ok, err, ret
+	local c = mongo.client(conf)
+	local db = c["admin"]
+	db:auth(conf.username, conf.password)
+
+	db.testcoll:dropIndex("*")
+	db.testcoll:drop()
+
+	ok, err, ret = db.testcoll:safe_insert({test_key = 1});
+	assert(ok and ret and ret.n == 1, err)
+
+	ok, err, ret = db.testcoll:safe_insert({test_key = 1});
+	assert(ok and ret and ret.n == 1, err)
+    skynet.error("Test auth success")
+end
+
 
 local function check_collection(name)
-    if not name or not allowed_collections[name] then
-        return false, "collection not allowed: " .. tostring(name)
+    if not name or black_list[name] then
+        return false, "black list not allowed: " .. tostring(name)
     end
     return true
 end
 
-function dbserver.init(conf)
-    local client = mongo.client(conf.mongo_conf)
-    db_instance = client:getDB(conf.mongo_conf.database)
-    allowed_collections = {}
-    if conf.collections and type(conf.collections) == "table" then
-        for _, v in ipairs(conf.collections) do
-            allowed_collections[v] = true
+function dbserver.init()
+    local client = mongo.client(conf)
+    db_instance = client:getDB(conf.database)
+    -- 读取黑名单
+    black_list = {}
+    if conf.black_list and type(conf.black_list) == "table" then
+        for _, v in ipairs(conf.black_list) do
+            black_list[v] = true
         end
     end
     -- 创建索引
