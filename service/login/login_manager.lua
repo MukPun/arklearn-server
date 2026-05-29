@@ -147,7 +147,7 @@ end
 skynet.start(function()
     -- launch Manager 
     skynet.error("[Ark Login Manager] login manager starting...")
-    skynet.register(config.name or "login_manager")
+    skynet.register(config.name or ".LoginManager")
     launchManager()
 end)
 

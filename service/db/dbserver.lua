@@ -1,3 +1,4 @@
+require "skynet.manager"
 local skynet = require "skynet"
 local mongo = require "skynet.db.mongo"
 local bson = require "bson"
@@ -5,7 +6,7 @@ local conf = require "database_cfg"
 
 
 local dbserver = {}
-local db_instance = nil
+local db_instance
 local black_list = {}
 
 
@@ -27,12 +28,12 @@ local function test_auth()
     skynet.error("Test auth success")
 end
 
-
-local function check_collection(name)
+local function checkandget_collection(name)
     if not name or black_list[name] then
-        return false, "black list not allowed: " .. tostring(name)
+        return false, "black list not allowed: " .. tostring(name), nil
     end
-    return true
+    skynet.error("name:", name)
+    return true, "", db_instance[name]
 end
 
 function dbserver.init()
@@ -50,51 +51,58 @@ function dbserver.init()
     skynet.error("dbserver initialized")
 end
 
+-- 插入
+-- @collection string 表名
+-- @doc table 表
 function dbserver.insert(collection, doc)
-    local ok, err = check_collection(collection)
+    local ok, err, collection_obj = checkandget_collection(collection)
     if not ok then
         return false, err
     end
-    return db_instance[collection]:safe_insert(doc)
+    return collection_obj:safe_insert(doc)
 end
 
+-- 更新表 只更新指定字段而不是全替换
+-- @collection string 表名
+-- @query table 查询条件
+-- @update table 要更新的内容
 function dbserver.update(collection, query, update)
-    local ok, err = check_collection(collection)
+    local ok, err, collection_obj = checkandget_collection(collection)
     if not ok then
         return false, err
     end
     -- 强制使用 $set 操作符 (设计决策: 避免误操作覆盖整个文档)
     local full_update = {['$set'] = update}
-    return db_instance[collection]:safe_update(query, full_update, false, false)
+    return collection_obj:safe_update(query, full_update, false, false)
 end
 
 function dbserver.delete(collection, query)
-    local ok, err = check_collection(collection)
+    local ok, err, collection_obj = checkandget_collection(collection)
     if not ok then
         return false, err
     end
-    return db_instance[collection]:safe_delete(query, true)
+    return collection_obj:safe_delete(query, true)
 end
 
 function dbserver.findOne(collection, query)
-    local ok, err = check_collection(collection)
+    local ok, err, collection_obj = checkandget_collection(collection)
     if not ok then
         return false, err
     end
-    return db_instance[collection]:findOne(query)
+    skynet.error("query=", query.uid, "collection_obj:", collection_obj)
+    return collection_obj:findOne(query)
 end
 
 function dbserver.find(collection, query)
-    local ok, err = check_collection(collection)
+    local ok, err, collection_obj = checkandget_collection(collection)
     if not ok then
         return false, err
     end
-    return db_instance[collection]:find(query)
+    return collection_obj:find(query)
 end
 
 -- 注册服务处理函数
 skynet.start(function()
-    skynet.register("dbserver")
     skynet.dispatch("lua", function(session, source, cmd, ...)
         local f = dbserver[cmd]
         if f then
@@ -104,6 +112,8 @@ skynet.start(function()
             end
         end
     end)
+    skynet.register(".DbServer")
+    test_auth()
 end)
 
 return dbserver
