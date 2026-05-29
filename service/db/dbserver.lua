@@ -7,7 +7,7 @@ local db_instance = nil
 local allowed_collections = {}
 
 local function check_collection(name)
-    if not allowed_collections[name] then
+    if not name or not allowed_collections[name] then
         return false, "collection not allowed: " .. tostring(name)
     end
     return true
@@ -17,8 +17,10 @@ function dbserver.init(conf)
     local client = mongo.client(conf.mongo_conf)
     db_instance = client:getDB(conf.mongo_conf.database)
     allowed_collections = {}
-    for _, v in ipairs(conf.collections) do
-        allowed_collections[v] = true
+    if conf.collections and type(conf.collections) == "table" then
+        for _, v in ipairs(conf.collections) do
+            allowed_collections[v] = true
+        end
     end
     -- 创建索引
     db_instance.accounts:createIndex({name = 1}, {unique = true})
@@ -38,7 +40,7 @@ function dbserver.update(collection, query, update)
     if not ok then
         return false, err
     end
-    -- 强制使用 $set 操作符
+    -- 强制使用 $set 操作符 (设计决策: 避免误操作覆盖整个文档)
     local full_update = {['$set'] = update}
     return db_instance[collection]:safe_update(query, full_update, false, false)
 end
