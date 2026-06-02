@@ -14,6 +14,7 @@ function Agent.new()
     obj.world = nil
     obj.uid = nil
     obj.state = const.loginState.LOGIN_STATE_NONE      -- Agent 状态 未登录、登录中、登录成功、登录失败
+    obj.CMD = {}                -- 处理其他服务的接口
     return setmetatable(obj, Agent)
 end
 
@@ -68,11 +69,23 @@ function Agent:logout()
     end
 end
 
+
+function Agent:client_dispatch(msg)
+    -- 客户端请求处理
+
+end
+
+
+function Agent.CMD:common()
+    -- 服务请求处理
+    
+end
+
 local agentObj = Agent.new()
 
 skynet.start(function()
     skynet.dispatch("lua", function(session, source, cmd, ...)
-        local f = agentObj[cmd]
+        local f = agentObj.CMD[cmd]
         if f then
             local ret = f(agentObj, ...)
             if session > 0 then
@@ -80,4 +93,5 @@ skynet.start(function()
             end
         end
     end)
+    skynet.dispatch("client", agentObj.client_dispatch)
 end)

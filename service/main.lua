@@ -13,23 +13,24 @@ skynet.start(function()
 	-- 	local console = skynet.newservice("console")
 	-- end
 	skynet.newservice("debug_console", 8000)
-
+	-- -- 启动Login_Manager
 	local loginServer = skynet.newservice("login/login_manager")
+	-- 启动Agent_Manager
+	local agent_manager = skynet.newservice("agent/agent_manager")
 
 	-- -- 启动 Gate
-	-- local watchdog = skynet.newservice("gate/watchdog")
-	-- local addr, port = skynet.call(watchdog, "lua", "start", loginServer)
-	-- skynet.error("Watchdog listen on " .. addr .. ":" .. port)
+	local gate = skynet.newservice("gate", loginServer)
+	skynet.call(gate, "lua", "open" , {
+		port = 8888,
+		maxclient = 64,
+		servername = "10001",
+	})
 
 	-- -- DbProxy
 	-- -- 初始化 DB Proxy
 	local dbProxy = skynet.uniqueservice("db/dbserver")
 	skynet.call(dbProxy, "lua", "init")
 
-	-- -- 启动Login_Manager
-	-- local login_manager = skynet.newservice("login/login_manager")
-	-- -- 启动Agent_Manager
-	-- local agent_manager = skynet.newservice("agent.agent_manager")
 
 	skynet.exit()
 end)

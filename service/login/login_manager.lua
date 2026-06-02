@@ -16,21 +16,6 @@ local worker_index = 1      -- 当前workeId
 local socket_error = {}
 local server_list = {}      -- {server_name -> server_id} 服务名 映射 服务句柄
 
-
-local function assert_socket(service, v, fd)
-	if v then
-		return v
-	else
-		skynet.error(string.format("%s failed: socket (fd = %d) closed", service, fd))
-		error(socket_error)
-	end
-end
-
-local function write(service, fd, text)
-	assert_socket(service, socket.write(fd, text), fd)
-end
-
-
 -- 登录处理
 local function login_handler(server, uid, secret)
     print(string.format("%s@%s is login, secret is %s", uid, server, crypt.hexencode(secret)))
@@ -50,6 +35,18 @@ local function login_handler(server, uid, secret)
 	return subid
 end
 
+local function assert_socket(service, v, fd)
+	if v then
+		return v
+	else
+		skynet.error(string.format("%s failed: socket (fd = %d) closed", service, fd))
+		error(socket_error)
+	end
+end
+
+local function write(service, fd, text)
+	assert_socket(service, socket.write(fd, text), fd)
+end
 
 local function get_worker(fd)
     local worker = worker_pools[worker_index]
