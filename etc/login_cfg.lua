@@ -5,6 +5,6 @@ return {
     queue_timeout = 10,   -- s
     worker_count = 8,
     host = "0.0.0.0",
-    port = 80001,
+    port = 8001,
     name = "login_manager",
 }
