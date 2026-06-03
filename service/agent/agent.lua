@@ -2,6 +2,10 @@
 local skynet = require "skynet"
 local AgentWorld = require "agent.world"
 local const = require "common.const"
+local sprotoloader = require "sprotoloader"
+local dispatcher = require "game.util.dispatcher"
+local log = require "log"
+local c2s_sproto
 
 -- Agent类
 local Agent = {}
@@ -15,32 +19,36 @@ function Agent.new()
     obj.uid = nil
     obj.state = const.loginState.LOGIN_STATE_NONE      -- Agent 状态 未登录、登录中、登录成功、登录失败
     obj.CMD = {}                -- 处理其他服务的接口
+    obj.dispatcher = nil        -- 协议分发
     return setmetatable(obj, Agent)
 end
 
 -- Agent初始化入口
 function Agent:start(conf)
     self.gate = conf.gate
-
     -- 创建 ECS World
-    agent.world = AgentWorld.new(uid)
+    self.world = AgentWorld.new(self.uid)
 
     -- 异步加载玩家数据
     local db_proxy = skynet.uniqueservice("db_proxy", "lua")
-    agent.world:load_from_db(db_proxy)
+    self.world:load_from_db(db_proxy)
 
+    -- 加载协议
+	c2s_sproto = sprotoloader.load(1)
+    self.dispatcher_obj = dispatcher.new(c2s_sproto)
+    self.dispatcher_obj:register_all_handlers()
     return true
 end
 
 function Agent:query_player_data(uid)
-    if uid ~= agent.uid then
+    if uid ~= self.uid then
         return nil
     end
-    return agent.world:get_component(agent.uid, "PlayerDataComponent")
+    return self.world:get_component(self.uid, "PlayerDataComponent")
 end
 
 function Agent:get_fight_power(uid)
-    local player_data = agent.world:get_component(agent.uid, "PlayerDataComponent")
+    local player_data = self.world:get_component(self.uid, "PlayerDataComponent")
     if not player_data then
         return 0
     end
@@ -53,7 +61,7 @@ function Agent:get_fight_power(uid)
 end
 
 function Agent:handle_game_message(cmd, ...)
-    local f = agent[cmd] or CMD[cmd]
+    local f = self[cmd] or self.CMD[cmd]
     if f then
         return f(...)
     end
@@ -63,15 +71,34 @@ end
 function Agent:logout()
     -- 保存数据
     local db_proxy = skynet.uniqueservice("db_proxy", "lua")
-    local player_data = agent.world:get_component(agent.uid, "PlayerDataComponent")
+    local player_data = self.world:get_component(self.uid, "PlayerDataComponent")
     if player_data then
-        skynet.call(db_proxy, "lua", "save_player", agent.uid, player_data)
+        skynet.call(db_proxy, "lua", "save_player", self.uid, player_data)
     end
 end
 
 
 function Agent:client_dispatch(msg)
     -- 客户端请求处理
+    local tag, msg = string.unpack(">I4c"..#msg-4, msg)
+    local sproto_type = c2s_sproto:queryproto(tag)
+    if sproto_type and sproto_type.name then
+        local args = c2s_sproto:request_decode(tag, msg)  -- 解码获取参数
+        local name = sproto_type.name       -- 协议名称
+        local handle_ok, response = pcall(self.dispatcher_obj.handle, self.dispatcher_obj, self.user_info, name, args)
+        log.log("[agent ]client_dispatch proto:%s, ok: %s", sproto_type.name, handle_ok)
+        local response_ok, response_str = pcall(c2s_sproto.response_encode, c2s_sproto, tag, response)
+        if response_ok then
+            skynet.ret(response_str)
+        else
+            skynet.error("msgagent handle proto failed!", sproto_type.name)
+            skynet.ignoreret()
+        end
+
+    else
+        skynet.error("recieve wrong proto string : ", msg)
+        skynet.ignoreret()
+    end
 
 end
 

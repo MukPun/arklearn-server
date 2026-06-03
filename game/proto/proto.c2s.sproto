@@ -69,3 +69,7 @@ register 2 {
     request RegisterRequest
     response RegisterResponse
 }
+
+test_func 3 {
+    
+}
