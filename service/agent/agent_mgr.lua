@@ -2,6 +2,11 @@
 require "skynet.manager"
 -- 单一映射表：uid 登录前代表 fd，登录后代表角色唯一 ID
 local skynet = require "skynet"
+local logger = require "log"
+
+local function log(fmt, ...)
+	logger.format("[Ark Login Worker] " .. fmt, ...)
+end
 
 -- AgentManager 类
 local AgentManager = {}
@@ -36,7 +41,7 @@ function AgentManager:create_agent(source, uid, sid, secret)
     end
 
     -- 创建新 Agent
-    local agent_service = skynet.newservice("agent")
+    local agent_service = skynet.newservice("agent/agent")
     skynet.call(agent_service, "lua", "start", source, uid, sid, secret)
 
     self.agents[uid] = {
@@ -72,6 +77,7 @@ end
 local manager = AgentManager.new()
 
 skynet.start(function()
+
     skynet.dispatch("lua", function(session, source, cmd, ...)
         local f = manager[cmd]
         if f then

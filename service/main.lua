@@ -1,4 +1,5 @@
 local skynet = require "skynet"
+local gate_config = require "gate_cfg"
 
 skynet.start(function()
 	skynet.error("ArkServer starting...")
@@ -14,17 +15,13 @@ skynet.start(function()
 	-- end
 	skynet.newservice("debug_console", 8000)
 	-- -- 启动Login_Manager
-	local loginServer = skynet.newservice("login/login_manager")
+	local loginServer = skynet.newservice("login/login_mgr")
 	-- 启动Agent_Manager
-	local agent_manager = skynet.newservice("agent/agent_manager")
+	local agent_manager = skynet.newservice("agent/agent_mgr")
 
 	-- -- 启动 Gate
 	local gate = skynet.newservice("gate", loginServer)
-	skynet.call(gate, "lua", "open" , {
-		port = 8888,
-		maxclient = 64,
-		servername = "10001",
-	})
+	skynet.call(gate, "lua", "open" , gate_config)
 
 	-- -- DbProxy
 	-- -- 初始化 DB Proxy

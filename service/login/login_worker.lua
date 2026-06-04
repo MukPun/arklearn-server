@@ -3,24 +3,32 @@ require "skynet.manager"
 local skynet = require "skynet"
 local crypt = require "skynet.crypt"
 local socket = require "skynet.socket"
+local logger = require "log"
+local const = require "const"
+local util = require "util"
 
 local socket_error = {}
+
+local function log(fmt, ...)
+	logger.format("[Ark Login Worker] " .. fmt, ...)
+end
 
 -- 验证逻辑
 local function auth_handler(token)
 	-- the token is base64(user)@base64(server):base64(password)
 	local user, server, password = token:match("([^@]+)@([^:]+):(.+)")
-	user = crypt.base64decode(user)
-	server = crypt.base64decode(server)
-	password = crypt.base64decode(password)
-    skynet.error("[Ark login worker] auth_handler: ", user, server, password)
+	user = crypt.base64decode(user)		-- 账号名
+	server = crypt.base64decode(server)	-- 登录 目标服务器
+	password = crypt.base64decode(password)	-- 账号密码
+    log("do auth: ", user, server, password)
     -- 请求MongoDB获取账号数据进行校验
-    local account_data = skynet.call("dbserver", "lua", "findOne", "accounts", {name = user})
+    local account_data = skynet.call(const.public_server_name.DB_SERVER, "lua", "findOne", "accounts", {name = user})
     if account_data and account_data.uid and account_data.password then
         assert(password == account_data.password, "Invalid password")
     else
         assert(false, "Invalid account")
     end
+	log("auth success: %s", util.Dumpstr(account_data))
 	return server, user
     
 end
@@ -57,30 +65,30 @@ local function auth(fd, addr)
 		-- set socket buffer limit (8K) 设置 socket 接收缓冲区的最大限制
 		-- If the attacker send large package, close the socket
 		socket.limit(fd, 8192)
-
+		log("start auth.")
 		local challenge = crypt.randomkey()
-		write("auth", fd, crypt.base64encode(challenge).."\n")
+		write("auth", fd, crypt.base64encode(challenge).."\n")		-- 下发 challenge 给客户端
 
 		local handshake = assert_socket("auth", socket.readline(fd), fd)
-		local clientkey = crypt.base64decode(handshake)
+		local clientkey = crypt.base64decode(handshake)		-- 解码获取客户端发送的 随机clientkey
 		if #clientkey ~= 8 then
 			error "Invalid client key"
 		end
-		local serverkey = crypt.randomkey()
-		write("auth", fd, crypt.base64encode(crypt.dhexchange(serverkey)).."\n")
+		local serverkey = crypt.randomkey()			-- 获取随机 serverkey
+		write("auth", fd, crypt.base64encode(crypt.dhexchange(serverkey)).."\n")		-- 通过dhexchange生成公钥发送给客户端
 
-		local secret = crypt.dhsecret(clientkey, serverkey)
+		local secret = crypt.dhsecret(clientkey, serverkey)		-- 通过对方公钥、自己公钥serverkey 算出一致共享密钥
 
-		local response = assert_socket("auth", socket.readline(fd), fd)
-		local hmac = crypt.hmac64(challenge, secret)
+		local response = assert_socket("auth", socket.readline(fd), fd)		-- 接收客户端发送的hmac
+		local hmac = crypt.hmac64(challenge, secret)		-- 用共同密钥 对 challenge进行加密 获得hmac
 
-		if hmac ~= crypt.base64decode(response) then
+		if hmac ~= crypt.base64decode(response) then		-- 校验双端的 hmac是否一致
 			error "challenge failed"
 		end
 
-		local etoken = assert_socket("auth", socket.readline(fd),fd)
+		local etoken = assert_socket("auth", socket.readline(fd),fd)		-- 接收客户端发来的编码后的token
 
-		local token = crypt.desdecode(secret, crypt.base64decode(etoken))
+		local token = crypt.desdecode(secret, crypt.base64decode(etoken))		-- 解码token
         -- 游戏业务层 校验 token 并且返回 登录的服务名、 用户uid
 		local ok, server, uid =  pcall(auth_handler, token)
 

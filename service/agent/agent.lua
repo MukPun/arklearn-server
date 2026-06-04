@@ -1,9 +1,9 @@
 -- Agent 服务：玩家在服务端的代理
 local skynet = require "skynet"
 local AgentWorld = require "agent.world"
-local const = require "common.const"
+local const = require "const"
 local sprotoloader = require "sprotoloader"
-local dispatcher = require "game.util.dispatcher"
+local dispatcher = require "dispatcher"
 local log = require "log"
 local c2s_sproto
 
@@ -78,7 +78,7 @@ function Agent:logout()
 end
 
 
-function Agent:client_dispatch(msg)
+function Agent:client_dispatch(_, _, msg)
     -- 客户端请求处理
     local tag, msg = string.unpack(">I4c"..#msg-4, msg)
     local sproto_type = c2s_sproto:queryproto(tag)
@@ -102,11 +102,6 @@ function Agent:client_dispatch(msg)
 
 end
 
-
-function Agent.CMD:common()
-    -- 服务请求处理
-    
-end
 
 local agentObj = Agent.new()
 

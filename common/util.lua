@@ -1,6 +1,7 @@
+local util = {}
 
 -- 深拷，传参避免引用污染
-function Deepcopy(object)
+function util.Deepcopy(object)
     -- 已经复制过的table，key为复制源table，value为复制后的table
     -- 为了防止table中的某个属性为自身时出现死循环
     -- 避免本该是同一个table的属性，在复制时变成2个不同的table(内容同，但是地址关系和原来的不一样了)
@@ -22,3 +23,28 @@ function Deepcopy(object)
     end
     return _copy(object)
 end
+
+-- 打印 table
+-- 返回字符串版本：dumpstr(table)
+function util.Dumpstr(t)
+    local result = {}
+
+    local function _dump(t, space)
+        space = space or ""
+        for k, v in pairs(t) do
+            local key = tostring(k)
+            if type(v) == "table" then
+                table.insert(result, space .. key .. " = {")
+                _dump(v, space .. "  ")
+                table.insert(result, space .. "}")
+            else
+                table.insert(result, space .. key .. " = " .. tostring(v))
+            end
+        end
+    end
+
+    _dump(t)
+    return table.concat(result, "\n")
+end
+
+return util

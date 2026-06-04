@@ -24,7 +24,7 @@ function server.login_handler(uid, secret)
 	local id = internal_id	-- don't use internal_id directly
 	local username = msgserver.username(uid, id, servername)
 	-- 首次登录的时候,默认都请求Agent,分配一个Agent
-	local agent = skynet.uniqueservice(".AgentManager")
+	local agent = skynet.uniqueservice("agent/agent_mgr")
 
 	local u = {
 		username = username,

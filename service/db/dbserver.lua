@@ -3,12 +3,18 @@ local skynet = require "skynet"
 local mongo = require "skynet.db.mongo"
 local bson = require "bson"
 local conf = require "database_cfg"
+local logger = require "log"
+local const = require "const"
 
 
 local dbserver = {}
 local db_instance
 local black_list = {}
 
+
+local function log(fmt, ...)
+	logger.format("[DbServer] " .. fmt, ...)
+end
 
 local function test_auth()
     skynet.error("Test auth start")
@@ -104,6 +110,7 @@ end
 -- 注册服务处理函数
 skynet.start(function()
     skynet.dispatch("lua", function(session, source, cmd, ...)
+        log("accept message:%s", cmd)
         local f = dbserver[cmd]
         if f then
             local ret = {f(...)}
@@ -112,7 +119,7 @@ skynet.start(function()
             end
         end
     end)
-    skynet.register(".DbServer")
+    skynet.register(const.public_server_name.DB_SERVER)
     test_auth()
 end)
 

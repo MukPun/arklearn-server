@@ -6,6 +6,7 @@ local skynet = require "skynet"
 local crypt = require "skynet.crypt"
 local config = require "login_cfg"
 local socket = require "skynet.socket"
+local logger = require "log"
 
 local db_proxy = nil
 local worker_pools = {}         -- {workeId -> workerServerId}
@@ -15,6 +16,13 @@ local worker_count = 8
 local worker_index = 1      -- 当前workeId
 local socket_error = {}
 local server_list = {}      -- {server_name -> server_id} 服务名 映射 服务句柄
+
+
+local function log(f, fmt, ...)
+    if f then
+	    logger.format("[Ark Login Worker] " .. fmt, ...)
+    end
+end
 
 -- 登录处理
 local function login_handler(server, uid, secret)
@@ -71,7 +79,7 @@ local function accept_handle(worker, fd, addr)
 		end
 		error(server)
     end
-
+    skynet.error("accept_handle auth success")
     if not config.multilogin then
         -- 是否允许重复登录
         if user_login[uid] then

@@ -7,5 +7,9 @@ const.loginState = {              -- 登录状态
     LOGIN_STATE_LOGIN_FAIL = 3,     -- 登录失败
 }
 
+-- 服务名
+const.public_server_name = {
+    DB_SERVER = ".DbServer"     -- 数据库服务
+}
 
 return const
