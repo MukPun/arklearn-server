@@ -60,9 +60,10 @@
 
 # 定义协议
 
-login 1 {
-    request LoginRequest
-    response LoginResponse
+heartbeat 1 {
+	response {
+		result 0 : integer
+	}
 }
 
 register 2 {

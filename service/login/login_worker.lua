@@ -85,7 +85,7 @@ local function auth(fd, addr)
 		if hmac ~= crypt.base64decode(response) then		-- 校验双端的 hmac是否一致
 			error "challenge failed"
 		end
-
+		-- 客户端完成加密握手校验 开始发送账密进行账密校验
 		local etoken = assert_socket("auth", socket.readline(fd),fd)		-- 接收客户端发来的编码后的token
 
 		local token = crypt.desdecode(secret, crypt.base64decode(etoken))		-- 解码token

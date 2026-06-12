@@ -1,6 +1,6 @@
 local skynet = require "skynet"
 
-local account
+local account = {} 
 
 
 function account.test_func()

@@ -4,12 +4,23 @@ local AgentWorld = require "agent.world"
 local const = require "const"
 local sprotoloader = require "sprotoloader"
 local dispatcher = require "dispatcher"
-local log = require "log"
+local logger = require "log"
 local c2s_sproto
+
+skynet.register_protocol { -- 注册client类型消息的处理方式
+	name = "client",
+	id = skynet.PTYPE_CLIENT,
+	unpack = skynet.tostring,
+}
+
+local function log(fmt, ...)
+    logger.format("[Agent ]" .. fmt, ...)
+end
 
 -- Agent类
 local Agent = {}
 Agent.__index = Agent
+Agent.CMD = {}
 
 function Agent.new()
     local obj = {}
@@ -18,20 +29,23 @@ function Agent.new()
     obj.world = nil
     obj.uid = nil
     obj.state = const.loginState.LOGIN_STATE_NONE      -- Agent 状态 未登录、登录中、登录成功、登录失败
-    obj.CMD = {}                -- 处理其他服务的接口
     obj.dispatcher = nil        -- 协议分发
     return setmetatable(obj, Agent)
 end
 
 -- Agent初始化入口
-function Agent:start(conf)
-    self.gate = conf.gate
+function Agent:start(source, uid, sid, secret, mgr_addr)
+    skynet.error(source, uid, sid, secret, mgr_addr)
+    self.gate = source
+    self.uid = uid
+    self.mgr_addr = mgr_addr
+    log("uid is :", uid, "sid is :", sid)
     -- 创建 ECS World
     self.world = AgentWorld.new(self.uid)
 
     -- 异步加载玩家数据
-    local db_proxy = skynet.uniqueservice("db_proxy", "lua")
-    self.world:load_from_db(db_proxy)
+    local db_server = skynet.uniqueservice("db/dbserver", "lua")
+    self.world:load_from_db(db_server)
 
     -- 加载协议
 	c2s_sproto = sprotoloader.load(1)
@@ -70,23 +84,32 @@ end
 
 function Agent:logout()
     -- 保存数据
-    local db_proxy = skynet.uniqueservice("db_proxy", "lua")
+    local db_server = skynet.uniqueservice("db/dbserver", "lua")
     local player_data = self.world:get_component(self.uid, "PlayerDataComponent")
     if player_data then
-        skynet.call(db_proxy, "lua", "save_player", self.uid, player_data)
+        skynet.call(db_server, "lua", "update", "players", {uid = self.uid}, player_data)
     end
+    -- 通知 Agent Mgr
+    skynet.call(self.mgr_addr, "lua", "logout", self.uid)
 end
 
 
-function Agent:client_dispatch(_, _, msg)
+function Agent:client_dispatch(msg)
     -- 客户端请求处理
+    log("client_dispatch1 msg=%s", msg)
     local tag, msg = string.unpack(">I4c"..#msg-4, msg)
-    local sproto_type = c2s_sproto:queryproto(tag)
+    log("client_dispatch tag: %s, msg=%s", tag, msg)
+    local ok, sproto_type = pcall(c2s_sproto.queryproto, c2s_sproto, tag)
+    if not ok or not sproto_type then
+        skynet.error(string.format("client_dispatch: unknown proto tag %d", tag))
+        skynet.ignoreret()
+        return
+    end
     if sproto_type and sproto_type.name then
         local args = c2s_sproto:request_decode(tag, msg)  -- 解码获取参数
         local name = sproto_type.name       -- 协议名称
         local handle_ok, response = pcall(self.dispatcher_obj.handle, self.dispatcher_obj, self.user_info, name, args)
-        log.log("[agent ]client_dispatch proto:%s, ok: %s", sproto_type.name, handle_ok)
+        log("[agent ]client_dispatch proto:%s, ok: %s", sproto_type.name, handle_ok)
         local response_ok, response_str = pcall(c2s_sproto.response_encode, c2s_sproto, tag, response)
         if response_ok then
             skynet.ret(response_str)
@@ -102,18 +125,34 @@ function Agent:client_dispatch(_, _, msg)
 
 end
 
+function Agent.CMD:start(source, uid, sid, secret, mgr_addr)
+    return self:start(source, uid, sid, secret, mgr_addr)
+end
+
+
+function Agent.CMD:afk()
+    -- TODO: 标记玩家离线、清理资源
+    return true
+end
+
+function Agent.CMD:logout()
+    return self:logout()
+end
+
 
 local agentObj = Agent.new()
 
 skynet.start(function()
     skynet.dispatch("lua", function(session, source, cmd, ...)
+        skynet.error("call agent session", session, cmd)
         local f = agentObj.CMD[cmd]
         if f then
-            local ret = f(agentObj, ...)
             if session > 0 then
-                skynet.ret(skynet.pack(ret))
+                skynet.ret(skynet.pack(f(agentObj, ...)))
             end
         end
     end)
-    skynet.dispatch("client", agentObj.client_dispatch)
+    skynet.dispatch("client", function (_, _, msg)
+        agentObj:client_dispatch(msg)
+    end)
 end)

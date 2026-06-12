@@ -18,10 +18,8 @@ local socket_error = {}
 local server_list = {}      -- {server_name -> server_id} 服务名 映射 服务句柄
 
 
-local function log(f, fmt, ...)
-    if f then
-	    logger.format("[Ark Login Worker] " .. fmt, ...)
-    end
+local function log(fmt, ...)
+	logger.format("[Ark Login Worker] " .. fmt, ...)
 end
 
 -- 登录处理
@@ -39,7 +37,8 @@ local function login_handler(server, uid, secret)
 	end
     -- 请求游戏服 进行登录请求
 	local subid = tostring(skynet.call(gameserver, "lua", "login", uid, secret))
-	user_online[uid] = { address = gameserver, subid = subid , server = server}
+    log("login_handler subid=%s", subid)
+    user_online[uid] = { address = gameserver, subid = subid , server = server}
 	return subid
 end
 
@@ -79,7 +78,7 @@ local function accept_handle(worker, fd, addr)
 		end
 		error(server)
     end
-    skynet.error("accept_handle auth success")
+    log("accept_handle auth success")
     if not config.multilogin then
         -- 是否允许重复登录
         if user_login[uid] then
@@ -92,7 +91,7 @@ local function accept_handle(worker, fd, addr)
 	local ok, err = pcall(login_handler, server, uid, secret)
 	-- unlock login
 	user_login[uid] = nil
-
+    log("login_handle done ok:%s, err:%s", ok, err)
     if ok then
         -- 登录成功 返回结果给客户端
 		err = err or ""

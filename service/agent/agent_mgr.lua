@@ -5,7 +5,7 @@ local skynet = require "skynet"
 local logger = require "log"
 
 local function log(fmt, ...)
-	logger.format("[Ark Login Worker] " .. fmt, ...)
+	logger.format("[Agent Mgr] " .. fmt, ...)
 end
 
 -- AgentManager 类
@@ -28,10 +28,22 @@ function AgentManager:login(source, uid, sid, secret)
     -- 尝试分配Agent
     -- 初始化Agent
     -- 待Agent初始化完成后添加到Agent列表，把结果返回给gate
-    
+    log("in login:%s", source)
     local agent = self:create_agent(source, uid, sid, secret)
+    log("login: agent is :%s", agent)
     return true, "Allocation agent success", agent
 end
+
+-- Agent 登出后由Agent调用
+-- @param uid 角色唯一 ID
+function AgentManager:logout(uid)
+    log("in logout, uid: %s", uid)
+    if self.agents[uid] then
+        self:remove_agent(uid)
+    end
+    return true
+end
+
 
 -- 登录成功后创建 Agent
 function AgentManager:create_agent(source, uid, sid, secret)
@@ -42,7 +54,7 @@ function AgentManager:create_agent(source, uid, sid, secret)
 
     -- 创建新 Agent
     local agent_service = skynet.newservice("agent/agent")
-    skynet.call(agent_service, "lua", "start", source, uid, sid, secret)
+    skynet.call(agent_service, "lua", "start", source, uid, sid, secret, skynet.self())
 
     self.agents[uid] = {
         agent = agent_service,      -- 创建的Agent 服务句柄 TODO: 后续考虑用agent池优化
@@ -81,9 +93,8 @@ skynet.start(function()
     skynet.dispatch("lua", function(session, source, cmd, ...)
         local f = manager[cmd]
         if f then
-            local ret = f(manager, source, ...)
             if session > 0 then
-                skynet.ret(skynet.pack(ret))
+                skynet.ret(skynet.pack(f(manager, source, ...)))
             end
         end
     end)

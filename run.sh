@@ -20,6 +20,6 @@ do
 	esac
 done
 
-$ROOT/skynet/skynet $ROOT/config > log/$(date "+%Y%m%d-%H%M").log &
+$ROOT/skynet/skynet $ROOT/config > log/$(date "+%Y%m%d").log &
 
 fi

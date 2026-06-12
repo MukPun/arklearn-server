@@ -38,7 +38,6 @@ local function checkandget_collection(name)
     if not name or black_list[name] then
         return false, "black list not allowed: " .. tostring(name), nil
     end
-    skynet.error("name:", name)
     return true, "", db_instance[name]
 end
 
@@ -54,6 +53,7 @@ function dbserver.init()
     end
     -- 创建索引
     db_instance.accounts:createIndex({name = 1}, {unique = true})
+    db_instance.players:createIndex({uid = 1}, {unique = true})
     skynet.error("dbserver initialized")
 end
 

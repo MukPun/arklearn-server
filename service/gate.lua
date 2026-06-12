@@ -38,6 +38,7 @@ function server.login_handler(uid, secret)
 	if not ok then
 		error(string.format("login %s failed: %s", uid, err))
 	end
+	skynet.error("gate ok: ", ok, " err: ", err, " allocated_agent: ", allocated_agent)
 	u.agent = allocated_agent		-- 登录成功后，分配的Agent 替换掉 登录前的AgentManager
 	users[uid] = u
 	username_map[username] = u
@@ -84,8 +85,9 @@ function server.disconnect_handler(username)
 end
 
 -- call by self (when recv a request from client) 客户端消息转发
-function server.request_handler(username, msg)
+function server.request_handler(username, msg, sz)
 	local u = username_map[username]
+	skynet.error("request_handler msg: ", msg)
 	return skynet.tostring(skynet.rawcall(u.agent, "client", msg))
 end
 
