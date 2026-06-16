@@ -85,7 +85,7 @@ function server.disconnect_handler(username)
 end
 
 -- call by self (when recv a request from client) 客户端消息转发
-function server.request_handler(username, msg, sz)
+function server.request_handler(username, msg)
 	local u = username_map[username]
 	skynet.error("request_handler msg: ", msg)
 	return skynet.tostring(skynet.rawcall(u.agent, "client", msg))

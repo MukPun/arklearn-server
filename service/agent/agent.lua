@@ -5,7 +5,11 @@ local const = require "const"
 local sprotoloader = require "sprotoloader"
 local dispatcher = require "dispatcher"
 local logger = require "log"
+local util = require "util"
 local c2s_sproto
+local host
+local request
+
 
 skynet.register_protocol { -- 注册client类型消息的处理方式
 	name = "client",
@@ -49,6 +53,8 @@ function Agent:start(source, uid, sid, secret, mgr_addr)
 
     -- 加载协议
 	c2s_sproto = sprotoloader.load(1)
+    host = c2s_sproto:host("package")                 -- 用于解包 c2s的协议
+    request = host:attach(sprotoloader.load(2))       -- 用于s2c主动发送协议时,打包数据
     self.dispatcher_obj = dispatcher.new(c2s_sproto)
     self.dispatcher_obj:register_all_handlers()
     return true
@@ -97,33 +103,29 @@ end
 function Agent:client_dispatch(msg)
     -- 客户端请求处理
     log("client_dispatch1 msg=%s", msg)
-    local tag, msg = string.unpack(">I4c"..#msg-4, msg)
-    log("client_dispatch tag: %s, msg=%s", tag, msg)
-    local ok, sproto_type = pcall(c2s_sproto.queryproto, c2s_sproto, tag)
-    if not ok or not sproto_type then
-        skynet.error(string.format("client_dispatch: unknown proto tag %d", tag))
-        skynet.ignoreret()
-        return
-    end
-    if sproto_type and sproto_type.name then
-        local args = c2s_sproto:request_decode(tag, msg)  -- 解码获取参数
-        local name = sproto_type.name       -- 协议名称
-        local handle_ok, response = pcall(self.dispatcher_obj.handle, self.dispatcher_obj, self.user_info, name, args)
-        log("[agent ]client_dispatch proto:%s, ok: %s", sproto_type.name, handle_ok)
-        local response_ok, response_str = pcall(c2s_sproto.response_encode, c2s_sproto, tag, response)
-        if response_ok then
-            skynet.ret(response_str)
+    local type, protoname, result, gen_response, ud = host:dispatch(msg)
+    skynet.error("client_dispatch", "type: ", type, "name: ", protoname, "result: ", result, "gen_response:", gen_response, "ud", ud)
+    local handler = self.dispatcher_obj:get_handler_by_name(protoname)
+    if handler then
+        local ok, response = pcall(handler, args)
+        skynet.error("Agent:client_dispatch ok:", ok, "response:", util.Dumpstr(response))
+        if ok and gen_response ~= nil then
+            -- 按照协议 response协议编码 数据 返回给客户的
+            local encode_ok, response_str = pcall(gen_response, response)
+            skynet.error("Agent:client_dispatch encode_ok:", encode_ok, "response_str", response_str)
+            if encode_ok then
+                skynet.ret(response_str)
+            else
+                skynet.error("agent handle proto failed!", " name:", protoname)
+                skynet.ignoreret()
+            end
         else
-            skynet.error("msgagent handle proto failed!", sproto_type.name)
             skynet.ignoreret()
         end
-
-    else
-        skynet.error("recieve wrong proto string : ", msg)
-        skynet.ignoreret()
     end
-
 end
+
+
 
 function Agent.CMD:start(source, uid, sid, secret, mgr_addr)
     return self:start(source, uid, sid, secret, mgr_addr)

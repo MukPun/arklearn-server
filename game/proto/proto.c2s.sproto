@@ -60,17 +60,18 @@
 
 # 定义协议
 
-heartbeat 1 {
+handshake 1 {
 	response {
 		result 0 : integer
 	}
 }
 
-register 2 {
-    request RegisterRequest
-    response RegisterResponse
+heartbeat 2 {
+	response {
+		result 0 : integer
+	}
 }
 
-test_func 3 {
+register 3 {
     
 }
