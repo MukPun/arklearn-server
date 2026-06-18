@@ -29,7 +29,7 @@ local function auth_handler(token)
         assert(false, "Invalid account")
     end
 	log("auth success: %s", util.Dumpstr(account_data))
-	return server, user
+	return server, account_data.uid
     
 end
 

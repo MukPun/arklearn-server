@@ -37,9 +37,9 @@ local function login_handler(server, uid, secret)
 	end
     -- 请求游戏服 进行登录请求
 	local subid = tostring(skynet.call(gameserver, "lua", "login", uid, secret))
-    log("login_handler subid=%s", subid)
+    log("login_handler subid=%s, uid:%s", subid, uid)
     user_online[uid] = { address = gameserver, subid = subid , server = server}
-	return subid
+	return subid .. ":" .. uid
 end
 
 local function assert_socket(service, v, fd)

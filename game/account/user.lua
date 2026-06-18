@@ -47,7 +47,7 @@ function User.new(uid, agent)
     self.uid          = uid             -- 唯一id
     self.agent        = agent           -- 所属的agent 服务id   这个感觉不用记,因为userobj通常只在自己的agent存在
 
-    self.db_server    = skynet.uniqueservice(const.public_server_name.DB_SERVER)        -- 数据所在的dbserver 服务id
+    self.db_server    = const.public_server_name.DB_SERVER        -- 数据所在的dbserver 服务id
     self._loaded      = false       -- 是否已加载过
     self._dirty       = {}          -- {fields = true}          有变化的数据 下一次存盘时进行存盘
     self._saving      = false       -- 防止 save 并发
@@ -127,7 +127,7 @@ local function _apply_data(self, data)
         return
     end
     for field, value in pairs(data) do
-        skynet.debug("_apply_data field=", field, " value=", value)
+        skynet.error("_apply_data field=", field, " value=", value)
         self._data[field] = value
     end
 end
@@ -233,7 +233,7 @@ function User:_do_save_dirty()
             save_doc[fields] = self:get_var(fields)
         else
             -- (set_var 不支持删字段) 这不该发生, 这里只记 debug
-            skynet.debug("do_save_dirty: skip nil field=", fields, " (set_var(nil) 触发的非法调用)")
+            skynet.error("do_save_dirty: skip nil field=", fields, " (set_var(nil) 触发的非法调用)")
         end
     end
     local ok, err = self:_do_save(save_doc)

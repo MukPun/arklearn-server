@@ -52,8 +52,7 @@ function dbserver.init()
         end
     end
     -- 创建索引
-    db_instance.accounts:createIndex({name = 1}, {unique = true})
-    db_instance.players:createIndex({uid = 1}, {unique = true})         -- 暂时废弃
+    db_instance.accounts:createIndex({uid = 1}, {unique = true})
     db_instance.entities:createIndex({uid = 1}, {unique = true})        -- 实体表 (包含角色数据)
     skynet.error("dbserver initialized")
 end
