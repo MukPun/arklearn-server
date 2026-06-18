@@ -23,7 +23,7 @@ function AgentWorld.new(uid)
 end
 
 function AgentWorld:load_from_db(db_proxy)
-    local player_data = skynet.call(const.public_server_name.DB_SERVER, "lua", "findOne", "players", {uid = self.uid})
+    local player_data = skynet.call(const.public_server_name.DB_SERVER, "lua", "findOne", "players", {_id = self.uid})
     if player_data then
         self:add_component(self.uid, "PlayerDataComponent", PlayerDataComponent.new(player_data))
     end

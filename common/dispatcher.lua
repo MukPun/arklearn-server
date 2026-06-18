@@ -15,7 +15,8 @@
 
 
 local module = {
-    "game.account.account"
+    "game.account.account",
+    "game.system.init"
 }
 
 local Dispatcher = {}
@@ -74,15 +75,5 @@ end
 -- @param name  协议名称
 -- @param args  解包后的数据
 -- @
-
-function Dispatcher:handle(user_info, protocol_name, args)
-    local handler = self.get_handler_by_name(protocol_name)
-    if not handler then
-        return false, "unknown protocol " .. protocol_name
-    end
-
-    local ok, result = pcall(handler, user_info, args)
-    return ok, result
-end
 
 return Dispatcher

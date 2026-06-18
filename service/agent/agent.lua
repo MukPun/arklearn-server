@@ -1,11 +1,10 @@
 -- Agent 服务：玩家在服务端的代理
 local skynet = require "skynet"
-local AgentWorld = require "agent.world"
 local const = require "const"
 local sprotoloader = require "sprotoloader"
 local dispatcher = require "dispatcher"
 local logger = require "log"
-local util = require "util"
+local User = require "game.account.user"
 local c2s_sproto
 local host
 local request
@@ -30,8 +29,8 @@ function Agent.new()
     local obj = {}
     obj.gate = nil              -- gate 服务句柄
     obj.socketFd = nil          -- socket 唯一id
-    obj.world = nil
     obj.uid = nil
+    obj.user = nil              -- User 对象(加载/持久化玩家数据)
     obj.state = const.loginState.LOGIN_STATE_NONE      -- Agent 状态 未登录、登录中、登录成功、登录失败
     obj.dispatcher = nil        -- 协议分发
     return setmetatable(obj, Agent)
@@ -44,12 +43,14 @@ function Agent:start(source, uid, sid, secret, mgr_addr)
     self.uid = uid
     self.mgr_addr = mgr_addr
     log("uid is :", uid, "sid is :", sid)
-    -- 创建 ECS World
-    self.world = AgentWorld.new(self.uid)
 
-    -- 异步加载玩家数据
-    local db_server = skynet.uniqueservice("db/dbserver", "lua")
-    self.world:load_from_db(db_server)
+    -- 加载玩家数据(userObj 接管持久化:从 entities collection 拉,set/get 全部走 self.user)
+    self.user = User.new(self.uid, self)
+    local load_ok, err = self.user:load()
+    if not load_ok then
+        -- 数据加载失败, 则拒绝登录, 避免污染数据
+        error("user load error! reason: " .. tostring(err))
+    end
 
     -- 加载协议
 	c2s_sproto = sprotoloader.load(1)
@@ -64,20 +65,11 @@ function Agent:query_player_data(uid)
     if uid ~= self.uid then
         return nil
     end
-    return self.world:get_component(self.uid, "PlayerDataComponent")
-end
-
-function Agent:get_fight_power(uid)
-    local player_data = self.world:get_component(self.uid, "PlayerDataComponent")
-    if not player_data then
-        return 0
+    if not (self.user and self.user:is_loaded()) then
+        return nil
     end
-    -- 简化计算：level * 10 + sum(char elite * level)
-    local power = player_data.level * 10
-    for _, char in pairs(player_data.charList) do
-        power = power + char.elite * char.level
-    end
-    return power
+    -- 从 userObj 读数据拼装成 PlayerData 形状
+    return self.user:get_safe_data()
 end
 
 function Agent:handle_game_message(cmd, ...)
@@ -89,11 +81,12 @@ function Agent:handle_game_message(cmd, ...)
 end
 
 function Agent:logout()
-    -- 保存数据
-    local db_server = skynet.uniqueservice("db/dbserver", "lua")
-    local player_data = self.world:get_component(self.uid, "PlayerDataComponent")
-    if player_data then
-        skynet.call(db_server, "lua", "update", "players", {uid = self.uid}, player_data)
+    -- 用 userObj 全量落盘(close 内部走 save_all)
+    if self.user and self.user:is_loaded() then
+        local ok, err = self.user:close()
+        if not ok then
+            skynet.error("Agent:logout user close failed:", err)
+        end
     end
     -- 通知 Agent Mgr
     skynet.call(self.mgr_addr, "lua", "logout", self.uid)
@@ -102,26 +95,42 @@ end
 
 function Agent:client_dispatch(msg)
     -- 客户端请求处理
-    log("client_dispatch1 msg=%s", msg)
-    local type, protoname, result, gen_response, ud = host:dispatch(msg)
-    skynet.error("client_dispatch", "type: ", type, "name: ", protoname, "result: ", result, "gen_response:", gen_response, "ud", ud)
+    log("client_dispatch msg=%s", msg)
+    -- host:dispatch 返回 (type, name, args, gen_response, ud)
+    --   type = "REQUEST" / "RESPONSE"
+    --   name = 协议名(REQUEST 时是协议名,RESPONSE 时是 nil)
+    --   args = 解码后的 table(REQUEST 时是请求参数,RESPONSE 时是响应数据)
+    --   gen_response = 编码 RESPONSE 的 closure(REQUEST 时)
+    --   ud = 用户数据
+    local _, protoname, args, gen_response = host:dispatch(msg)
+    if not protoname then
+        skynet.ignoreret()
+        return
+    end
     local handler = self.dispatcher_obj:get_handler_by_name(protoname)
-    if handler then
-        local ok, response = pcall(handler, args)
-        skynet.error("Agent:client_dispatch ok:", ok, "response:", util.Dumpstr(response))
-        if ok and gen_response ~= nil then
-            -- 按照协议 response协议编码 数据 返回给客户的
-            local encode_ok, response_str = pcall(gen_response, response)
-            skynet.error("Agent:client_dispatch encode_ok:", encode_ok, "response_str", response_str)
-            if encode_ok then
-                skynet.ret(response_str)
-            else
-                skynet.error("agent handle proto failed!", " name:", protoname)
-                skynet.ignoreret()
-            end
+    if not handler then
+        skynet.error("Agent:client_dispatch no handler for:", protoname)
+        skynet.ignoreret()
+        return
+    end
+    -- 注入 self.user 作为 user_info(handler 签名约定为 function(user, args))
+    local ok, response = pcall(handler, self.user, args)
+    if not ok then
+        skynet.error("Agent:client_dispatch handler error name=", protoname, " err=", response)
+        skynet.ignoreret()
+        return
+    end
+    -- RESPONSE 编码 + 回包
+    if gen_response then
+        local enc_ok, resp_pkg = pcall(gen_response, response)
+        if enc_ok and type(resp_pkg) == "string" then
+            skynet.ret(resp_pkg)
         else
+            skynet.error("Agent:client_dispatch encode failed name=", protoname, " err=", resp_pkg)
             skynet.ignoreret()
         end
+    else
+        skynet.ignoreret()
     end
 end
 
