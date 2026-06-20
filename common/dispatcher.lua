@@ -15,8 +15,8 @@
 
 
 local module = {
-    "game.account.account",
-    "game.system.init"
+    "game.char.proto",
+    "game.system.proto"
 }
 
 local Dispatcher = {}

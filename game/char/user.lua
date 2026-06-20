@@ -26,11 +26,11 @@ local const = require "const"
 -- 角色要持久化的数据都存在_data里, SAVE_KEY定义了要存盘的字段 可以代表一个系统，也可以是单个数据
 local SAVE_KEY = {
     -- 玩家基础数据
-    "uid", "name", "level", "exp",
-    "reason",                   -- 理智(体力值)
+    "uid", "name", "level", "exp", "max_exp",
+    "reason", "max_reason",                  -- 理智(体力值)
     -- 系统数据
     "items_data",               -- 物品系统
-    "char_data",                -- 干员系统
+    -- "char_data",                -- 干员系统
 
 }
 
@@ -201,6 +201,11 @@ local function _build_persistent_data(self)
         end
     end
     -- 其他系统通过 get_persistent_dict 接口返回存盘的数据
+    -- 物品
+    local itemsMgr = self.get_var("items_mgr")
+    if itemsMgr then
+        data["items_data"] = itemsMgr.get_persistent_dict()
+    end
 
     return data
 end

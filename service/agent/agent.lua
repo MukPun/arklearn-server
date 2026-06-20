@@ -4,7 +4,7 @@ local const = require "const"
 local sprotoloader = require "sprotoloader"
 local dispatcher = require "dispatcher"
 local logger = require "log"
-local User = require "game.account.user"
+local User = require "game.char.user"
 local c2s_sproto
 local host
 local request

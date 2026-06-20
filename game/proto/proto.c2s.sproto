@@ -5,73 +5,48 @@
 }
 
 # 公共结构体
-
-.LoginRequest {
-    account 0 : string
-    password_hash 1 : string
-    token 2 : string
-    device_id 3 : string
+.charData {
+	id 0 : string
+	elite 1 : integer
+	level 2 : integer
+	exp 3 : integer
+	trust 4 : integer
 }
 
-.LoginResponse {
-    error_code 0 : integer
-    uid 1 : integer
-    token 2 : string
-    player_data 3 : PlayerData
-}
-
-.RegisterRequest {
-    account 0 : string
-    password_hash 1 : string
-    device_id 2 : string
-}
-
-.RegisterResponse {
-    error_code 0 : integer
-    uid 1 : integer
-}
-
-.PlayerData {
-    name 0 : string
-    level 1 : integer
-    exp 2 : integer
-    reason 3 : integer
-    char_list 4 : *CharData
-    squad 5 : *string
-    desktop_char 6 : string
-    items 7 : *ItemStack
-    permissions 8 : *string
-}
-
-.CharData {
-    id 0 : string
-    template_id 1 : string
-    elite 2 : integer
-    level 3 : integer
-    exp 4 : integer
-    trust 5 : integer
-}
-
-.ItemStack {
-    id 0 : integer
-    amount 1 : integer
+.itemStack {
+	id 0 : integer
+	amount 1 : integer
 }
 
 
-# 定义协议
+handShake 1 {
+	response {
+		result 0 : integer
+		uid 1 : integer
+	}
+}
 
-handshake 1 {
+heartBeat 2 {
 	response {
 		result 0 : integer
 	}
 }
 
-heartbeat 2 {
+register 3 {}
+
+# 首屏数据
+getHomePagePlayerData 4 {
+	request {
+		uid 0 : integer
+	}
 	response {
 		result 0 : integer
+		name 1 : string
+		level 2 : integer
+		exp 3 : integer
+		maxExp 4 : integer
+		reason 5 : integer
+		maxReason 6 : integer
+		items 7 : *itemStack
 	}
-}
-
-register 3 {
-    
 }
