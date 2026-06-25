@@ -45,7 +45,7 @@ end
 -- ##################################### 查询接口 #####################################
 
 -- 按主键取一行
--- @param table_name  sharedata 注册名(对应 game.info_list 的 key)
+-- @param table_name  sharedata 注册名(对应 game/info/info_list.lua 的 key)
 -- @param key         主键(一般是字符串 id)
 -- @return row | nil
 function M.get(table_name, key)

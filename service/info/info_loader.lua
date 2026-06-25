@@ -104,7 +104,7 @@ end
 -- 重载(开发期手动触发,生产可关)
 -- 用法: skynet.call(info_loader, "lua", "reload")
 function loader.reload()
-    local list = require "game.info_list"
+    local list = require "game.info.info_list"
     for name, cfg in pairs(list) do
         if type(cfg) == "string" then
             cfg = { file = cfg }
