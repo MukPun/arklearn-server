@@ -9,6 +9,14 @@ skynet.start(function()
 		"proto.c2s",		-- 1
 		"proto.s2c",		-- 2
 	})
+
+	-- 加载导表(json -> sharedata)
+	-- 这一步必须在所有业务服务(login/agent)起来之前完成,
+	-- 否则业务层调用 game.info.get 会查不到数据
+	local info_loader = skynet.uniqueservice("info/info_loader")
+	skynet.call(info_loader, "lua", "load")
+	require("info.init").mark_ready()
+
 	-- 启动监控
 	-- if not skynet.getenv "daemon" then
 	-- 	local console = skynet.newservice("console")
