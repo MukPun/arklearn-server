@@ -8,16 +8,18 @@ local Item = {}
 Item.__index = Item
 setmetatable(Item, {__index = dataModel})
 
--- 基础熟悉 会自动生成 get/set 函数
+-- 基础属性 会自动生成 get/set 函数
+-- 注意:DEFAULT_DATA 的 value 不能为 nil(否则该 key 不会被存入 table,init_data 循环失效,
+--       Item 的 get_/set_ 方法无法被自动生成)
 Item.DEFAULT_DATA = {
-    owner_id = nil,             -- 拥有者uid
-    id = nil,                   -- item唯一id 每个道具唯一 和导表无关
-    item_id = nil,              -- 道具导表id 同 导表 itemId
-    type = nil,                 -- 道具类型 同 导表 itemType
-    amount = nil,               -- 道具数量
-    name = nil,                 -- 道具命名
-    trade = nil,                -- 是否可交易
-    bage_type = nil,            -- 当前所在的背包类型
+    owner_id = 0,               -- 拥有者uid
+    id = 0,                     -- item唯一id 每个道具唯一 和导表无关
+    item_id = "",               -- 道具导表id 同 导表 itemId
+    type = "",                  -- 道具类型 同 导表 itemType
+    amount = 0,                 -- 道具数量
+    name = "",                  -- 道具命名
+    trade = 0,                  -- 是否可交易(0/1)
+    bage_type = "",             -- 当前所在的背包类型
 }
 
 -- 创建的时候 直接通过data注入数据

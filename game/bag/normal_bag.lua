@@ -12,7 +12,7 @@ function NormalBag:new(uid, bag_type, get_owner)
 end
 
 
--- 获取用于存盘数据
-function NormalBag:get_persistent_table()
-    return {""}
-end
+-- NormalBag 沿用 BaseBag 的默认 get_persistent_table 实现
+-- (返回 { items = { [item_uuid] = item_obj:get_persistent_table() } })
+
+return NormalBag

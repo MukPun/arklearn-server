@@ -154,7 +154,7 @@ local function _apply_data(self, data)
     for field, value in pairs(data) do
         skynet.error("_apply_data field=", field, " value=", value)
         if self._components[field] ~= nil then
-            self._components[field].apply_data(data)
+            self._components[field].apply_data(value)
         else
             self._data[field] = value
         end

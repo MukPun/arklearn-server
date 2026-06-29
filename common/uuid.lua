@@ -74,7 +74,7 @@ function UUID.genid()
 
     -- 64 位整数
     --结构: [留空1位] [时间32位] [服ID 10位] [服务ID 11位] [序列号 10位]
-    local uuid = (current_timestamp & TIMESTAMP_SHIFT) << 31
+    local uuid = (current_timestamp & TIMESTAMP_SHIFT) << 32
                 | (harbor << 21)
                 | (service_id << 10)
                 | sequence

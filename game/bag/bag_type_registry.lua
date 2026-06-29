@@ -9,9 +9,9 @@ function M.register(bag_type, cls)
 end
 
 -- 创建:BagMgr 用它来实例化
-function M.create(bag_type, uid, get_owner)
+function M.create(uid, bag_type, get_owner)
     local cls = M._map[bag_type] or M._default  -- 没注册就用 BaseBag
-    return cls.new(uid, bag_type, get_owner)
+    return cls:new(uid, bag_type, get_owner)
 end
 
 -- 设置默认类(没注册的 bag_type 会用这个)

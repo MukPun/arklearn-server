@@ -32,7 +32,7 @@ function DataModel:init_data(data)
         end
         -- 自动创建对应的get/set方法
         DataModel["set_" .. tostring(key)] = function (self, value)
-            self.set_var(key, value)
+            self:set_var(key, value)
         end
         DataModel["get_" .. tostring(key)] = function (self)
             return self:get_var(key)
@@ -49,7 +49,7 @@ function DataModel:set_var(key, value)
 end
 
 function DataModel:smart_get_var(key)
-    local func_name = "get_" .. "key"
+    local func_name = "get_" .. tostring(key)
     if self[func_name] ~= nil then
         return self:func_name()
     else
@@ -58,7 +58,7 @@ function DataModel:smart_get_var(key)
 end
 
 function DataModel:smart_set_var(key, value)
-    local func_name = "set_" .. "key"
+    local func_name = "set_" .. tostring(key)
     if self[func_name] ~= nil then
         self:func_name(value)
     else

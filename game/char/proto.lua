@@ -1,6 +1,5 @@
 local skynet = require("skynet")
 local util = require("util")
-local log = require("log")
 
 local char_proto = {}
 
@@ -21,9 +20,15 @@ function char_proto.getHomePagePlayerData(user_obj)
 end
 
 
+-- TODO 暂未实现
+-- 原 getAllBagItems 已注释:该 handler 未在 proto.c2s.sproto 中声明,
+-- Dispatcher:register 会 assert 失败导致 Agent 启服崩溃
+-- 启用步骤:先在 sproto 中新增 getAllBagItems 协议,然后取消下方注释 + 补全实现
+--[[
 function char_proto:getAllBagItems(user_obj)
-    log("[c2s] getAllBagItems uid:%s", user_obj.get_uid())
-    return {}
+    log("[c2s] getAllBagItems uid:%s", user_obj:get_uid())
+    return { items = user_obj:get_component("BagMgr"):get_sync_client_data_all() }
 end
+]]
 
 return char_proto
