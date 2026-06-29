@@ -17,7 +17,16 @@ function ItemTypeMgr.register(item_type, handler_table)
     handlers[item_type] = handler_table
 end
 
+function ItemTypeMgr.get_handler(item_type)
+    return handlers[item_type]
+end
+
 function ItemTypeMgr.init()
+    if init_ed then
+        return
+    end
+    init_ed = true
+
     local cwd = skynet.cwd and skynet.cwd() or "."
     local handler_dir = cwd .. "/game/items/handler/"
     local cmd
@@ -30,6 +39,7 @@ function ItemTypeMgr.init()
     local p = io.popen(cmd)
     if not p then
         skynet.error("ItemTypeMgr.init: 无法列举目录 " .. handler_dir)
+        init_ed = false  -- 列举失败,允许重试
         return
     end
     for file in p:lines() do
@@ -42,16 +52,6 @@ function ItemTypeMgr.init()
         end
     end
     p:close()
-end
-
-
-function ItemTypeMgr.get_handler(item_type)
-    return handlers[item_type]
-end
-
-if not init_ed then
-    ItemTypeMgr.init()
-    init_ed = true
 end
 
 return ItemTypeMgr

@@ -3,6 +3,9 @@ local uuid = require "uuid"
 local dataModel = require "base.data_model"
 local item_type_mgr = require "items.item_type_mgr"
 
+-- 初始化道具策略分发中心
+item_type_mgr.init()
+
 -- 道具的容器负责数据持有 和行为解耦 用策略模式选择处理函数 以及对外提供统一接口
 local Item = {}
 Item.__index = Item
