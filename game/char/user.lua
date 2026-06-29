@@ -20,6 +20,8 @@
 
 local skynet = require "skynet"
 local const = require "const"
+local component_registry = require "char.component_registry"
+require("game.char.component_list") -- 注册所有组件到 register
 
 -- 每个 fields 对应 mongodb的一个字段 角色的数据存在 entities 表里
 -- mongondb 表里, 每个角色的_id 是uid
@@ -42,16 +44,18 @@ User.__index = User
 -- 构造
 -- @param uid        角色唯一 ID
 -- @param agent      关联的 agent 对象(便于回调 / 后续扩展;目前仅缓存引用)
-function User.new(uid, agent)
+function User.new(uid)
     local self = setmetatable({}, User)
     self.uid          = uid             -- 唯一id
-    self.agent        = agent           -- 所属的agent 服务id   这个感觉不用记,因为userobj通常只在自己的agent存在
+    -- self.agent        = agent           -- 所属的agent 服务id   这个感觉不用记,因为userobj通常只在自己的agent存在
 
     self.db_server    = const.public_server_name.DB_SERVER        -- 数据所在的dbserver 服务id
     self._loaded      = false       -- 是否已加载过
     self._dirty       = {}          -- {fields = true}          有变化的数据 下一次存盘时进行存盘
     self._saving      = false       -- 防止 save 并发
     self._data        = {}          -- 数据 [fields = {系统数据}]
+    self._components  = {}          -- 组件对象
+    self:_setUpComponents()         -- 挂载组件
     return self
 end
 
@@ -118,6 +122,27 @@ function User:get_safe_data()
     return data
 end
 
+-- 注册组件对象
+function User:attach(name, comp_obj)
+    self._components[name] = comp_obj
+end
+
+-- 获取组件对象
+function User:get_component(name)
+    return self._components[name]
+end
+
+function User:_setUpComponents()
+    for name, factory_func in pairs(component_registry.get_registry()) do
+        local comp = factory_func(self.uid, function ()
+            return self
+        end)
+        self:attach(name, comp)
+    end
+end
+
+-- #####################################  SAVE START   #####################################
+
 
 -- 把 mongodb 拉到的 data 翻译到 obj 上
 -- @param data      mongodb findOne 返回的 table
@@ -128,7 +153,11 @@ local function _apply_data(self, data)
     end
     for field, value in pairs(data) do
         skynet.error("_apply_data field=", field, " value=", value)
-        self._data[field] = value
+        if self._components[field] ~= nil then
+            self._components[field].apply_data(data)
+        else
+            self._data[field] = value
+        end
     end
 end
 
@@ -167,6 +196,8 @@ function User:load()
     return true, self
 end
 
+-- #####################################  SAVE END   #####################################
+
 -- #####################################  dirty START   #####################################
 -- 标记某个 fields 为脏
 -- @param fields fields 名
@@ -202,9 +233,10 @@ local function _build_persistent_data(self)
     end
     -- 其他系统通过 get_persistent_dict 接口返回存盘的数据
     -- 物品
-    local itemsMgr = self.get_var("items_mgr")
-    if itemsMgr then
-        data["items_data"] = itemsMgr.get_persistent_dict()
+
+    local BagMgr = self:get_component("BagMgr")
+    if BagMgr then
+        data["items_data"] = BagMgr:get_persistent_table()
     end
 
     return data

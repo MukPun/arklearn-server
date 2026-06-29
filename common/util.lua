@@ -47,4 +47,13 @@ function util.Dumpstr(t)
     return table.concat(result, "\n")
 end
 
+util.tab = {}
+
+-- 表跟新 会修改 表a的数据
+function util.tab.update(dst_tab, src_tab)
+    for key, value in pairs(src_tab) do
+        dst_tab[key] = value
+    end
+end
+
 return util

@@ -1,0 +1,1 @@
+require "game.bag.bag_mgr"      -- 背包组件

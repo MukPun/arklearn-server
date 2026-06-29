@@ -36,6 +36,10 @@ function Agent.new()
     return setmetatable(obj, Agent)
 end
 
+function Agent:get_user()
+    return self.user
+end
+
 -- Agent初始化入口
 function Agent:start(source, uid, sid, secret, mgr_addr)
     skynet.error(source, uid, sid, secret, mgr_addr)
@@ -45,7 +49,7 @@ function Agent:start(source, uid, sid, secret, mgr_addr)
     log("uid is :", uid, "sid is :", sid)
 
     -- 加载玩家数据(userObj 接管持久化:从 entities collection 拉,set/get 全部走 self.user)
-    self.user = User.new(self.uid, self)
+    self.user = User.new(self.uid)
     local load_ok, err = self.user:load()
     if not load_ok then
         -- 数据加载失败, 则拒绝登录, 避免污染数据
